@@ -1,5 +1,5 @@
 {
-  "name": "t212",
+  "name": "t212-sdk",
   "version": "0.1.0",
   "description": "Fully typed TypeScript SDK for the Trading 212 Public API",
   "keywords": [

@@ -7,19 +7,19 @@ Works in Node.js 18+ and any runtime with a global `fetch` implementation.
 ## Install
 
 ```bash
-npm install t212
+npm install t212-sdk
 # or
-pnpm add t212
+pnpm add t212-sdk
 # or
-yarn add t212
+yarn add t212-sdk
 # or
-bun add t212
+bun add t212-sdk
 ```
 
 ## Quick start
 
 ```typescript
-import { T212 } from "t212";
+import { T212 } from "t212-sdk";
 
 const client = new T212({
   apiKey: process.env.T212_API_KEY!,
@@ -102,7 +102,7 @@ On HTTP errors the SDK throws `T212Error` with `status`, `body`, and optional `r
 ## Error handling
 
 ```typescript
-import { T212, T212Error } from "t212";
+import { T212, T212Error } from "t212-sdk";
 
 try {
   await client.orders.get(123);
