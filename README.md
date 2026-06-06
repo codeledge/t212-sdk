@@ -1,8 +1,59 @@
-# t212
+<p align="center">
+  <pre>
+  $$\      $$$$$$\    $$\    $$$$$$\                          $$\ $$\       
+  $$ |    $$  __$$\ $$$$ |  $$  __$$\                         $$ |$$ |      
+$$$$$$\   \__/  $$ |\_$$ |  \__/  $$ |         $$$$$$$\  $$$$$$$ |$$ |  $$\ 
+\_$$  _|   $$$$$$  |  $$ |   $$$$$$  |$$$$$$\ $$  _____|$$  __$$ |$$ | $$  |
+  $$ |    $$  ____/   $$ |  $$  ____/ \______|\$$$$$$\  $$ /  $$ |$$$$$$  / 
+  $$ |$$\ $$ |        $$ |  $$ |               \____$$\ $$ |  $$ |$$  _$$<  
+  \$$$$  |$$$$$$$$\ $$$$$$\ $$$$$$$$\         $$$$$$$  |\$$$$$$$ |$$ | \$$\ 
+   \____/ \________|\______|\________|        \_______/  \_______|\__|  \__|
+  </pre>
+</p>
 
-Fully typed TypeScript SDK for the [Trading 212 Public API](https://docs.trading212.com/api).
+<p align="center">
+  <a href="https://www.npmjs.com/package/t212-sdk"><img src="https://img.shields.io/npm/v/t212-sdk?style=for-the-badge&logo=npm&color=CB3837" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/t212-sdk"><img src="https://img.shields.io/npm/dm/t212-sdk?style=for-the-badge&logo=npm&color=CB3837" alt="npm downloads"></a>
+  <a href="https://github.com/codeledge/t212/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/t212-sdk?style=for-the-badge&color=22C55E" alt="license"></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-ready-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-18%2B-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" alt="Node 18+"></a>
+</p>
 
-Works in Node.js 18+ and any runtime with a global `fetch` implementation.
+<p align="center">
+  <strong>The developer-first way to automate Trading 212.</strong><br>
+  Fully typed · Zero runtime deps · Built-in rate limiting · Demo &amp; live ready
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/t212-sdk"><strong>Install on npm</strong></a> ·
+  <a href="https://docs.trading212.com/api">Official API docs</a> ·
+  <a href="https://github.com/codeledge/t212/issues">Report an issue</a>
+</p>
+
+---
+
+## Why `t212-sdk`?
+
+You shouldn't need to reverse-engineer HTTP quirks, guess response shapes, or babysit rate limits while building a trading bot, portfolio dashboard, or rebalance script.
+
+**`t212-sdk`** wraps the [Trading 212 Public API](https://docs.trading212.com/api) in a clean, typed client so you can focus on strategy — not plumbing.
+
+| | |
+|---|---|
+| **Fully typed** | Orders, positions, instruments, history — autocomplete everywhere |
+| **Zero dependencies** | Native `fetch`. No axios, no bloat. ~15KB bundled |
+| **Rate limits handled** | Serial queue + header-aware pacing + auto-retry on `429` |
+| **Paper & live** | Flip `environment: "demo"` or `"live"` — same API surface |
+| **Pagination built-in** | One page, all pages, or async iterators — your call |
+| **ESM + CJS** | Works in Node 18+, Bun, modern bundlers |
+
+```text
+  you  ──▶  t212-sdk  ──▶  Trading 212
+            auth · queue · types
+            JSON ──▶ TypeScript
+```
+
+---
 
 ## Install
 
@@ -16,7 +67,11 @@ yarn add t212-sdk
 bun add t212-sdk
 ```
 
+---
+
 ## Quick start
+
+**60 seconds from install to your first API call.**
 
 ```typescript
 import { T212 } from "t212-sdk";
@@ -24,26 +79,122 @@ import { T212 } from "t212-sdk";
 const client = new T212({
   apiKey: process.env.T212_API_KEY!,
   apiSecret: process.env.T212_API_SECRET!,
-  environment: "demo", // or "live"
+  environment: "demo", // paper trading — swap to "live" when ready
 });
 
+// Account snapshot
 const summary = await client.account.getSummary();
-console.log(summary.totalValue);
+console.log(`Portfolio value: ${summary.totalValue} ${summary.currency}`);
 
+// Place a fractional market order
 const order = await client.orders.placeMarket({
   ticker: "AAPL_US_EQ",
   quantity: 0.1,
 });
+console.log(`Order ${order.id} · ${order.status}`);
 ```
+
+> **Get API keys:** Trading 212 app → Settings → API (Beta).  
+> Supports **Invest** and **Stocks ISA** accounts.
+
+---
+
+## Features at a glance
+
+| | |
+|---|---|
+| **account** | `getSummary` · `getInfo` · `getCash` |
+| **orders** | `list` · `get` · `placeMarket` · `placeLimit` · `placeStop` · `placeStopLimit` · `cancel` |
+| **instruments** | `list` · `exchanges` · `findByTicker` |
+| **positions** | `list` |
+| **history** | paginated + `*All` + async iterators for orders, dividends, transactions |
+| **history.exports** | `list` · `request` |
+
+---
 
 ## Authentication
 
-Generate an API key pair in the Trading 212 app, then pass them to the client:
+Trading 212 uses HTTP Basic auth:
 
-- `apiKey` — HTTP Basic username
-- `apiSecret` — HTTP Basic password
+| Option | Role |
+|---|---|
+| `apiKey` | Username |
+| `apiSecret` | Password |
+| `environment` | `"demo"` → `demo.trading212.com` · `"live"` → `live.trading212.com` |
 
-Use `environment: "demo"` for paper trading (`demo.trading212.com`) and `"live"` for real accounts.
+Always test in **demo** first. Real money lives on **live**.
+
+---
+
+## Orders
+
+Positive `quantity` = **buy**. Negative = **sell**. Fractional shares supported.
+
+```typescript
+// Limit buy — expires end of day
+await client.orders.placeLimit({
+  ticker: "AAPL_US_EQ",
+  quantity: 1,
+  limitPrice: 150,
+  timeValidity: "DAY",
+});
+
+// Stop-loss sell
+await client.orders.placeStop({
+  ticker: "AAPL_US_EQ",
+  quantity: -1,
+  stopPrice: 140,
+  timeValidity: "GTC",
+});
+
+// Cancel
+await client.orders.cancel(orderId);
+```
+
+---
+
+## Pagination
+
+Historical data is cursor-paginated. Pick your style:
+
+```typescript
+// Single page
+const page = await client.history.orders({ limit: 50 });
+
+// Every item, all pages
+const all = await client.history.ordersAll({ limit: 50 });
+
+// Stream — memory friendly
+for await (const { order, fill } of client.history.ordersItems({ limit: 50 })) {
+  console.log(order.id, fill?.price);
+}
+```
+
+---
+
+## Rate limits — we got you
+
+Trading 212 rate-limits per account. **`t212-sdk` handles it for you:**
+
+- Requests run through a serial queue
+- Pacing follows `x-ratelimit-*` response headers
+- `429` responses trigger wait + automatic retry
+
+You write business logic. The SDK stays out of the way.
+
+```typescript
+import { T212Error } from "t212-sdk";
+
+try {
+  await client.orders.get(123);
+} catch (error) {
+  if (error instanceof T212Error && error.isRateLimited) {
+    // Rare — SDK retries automatically; this is the escape hatch
+  }
+}
+```
+
+---
 
 ## API coverage
 
@@ -57,90 +208,43 @@ Use `environment: "demo"` for paper trading (`demo.trading212.com`) and `"live"`
 | `history.exports` | `list`, `request` |
 | `pies` | deprecated Trading 212 endpoints |
 
-## Orders
-
-Use a positive `quantity` to buy and a negative `quantity` to sell.
-
-```typescript
-await client.orders.placeLimit({
-  ticker: "AAPL_US_EQ",
-  quantity: 1,
-  limitPrice: 150,
-  timeValidity: "DAY", // or "GTC"
-});
-
-await client.orders.placeStop({
-  ticker: "AAPL_US_EQ",
-  quantity: -1,
-  stopPrice: 140,
-  timeValidity: "GTC",
-});
-```
-
-## Pagination
-
-Historical endpoints return cursor-based pages. You can fetch one page, every page, or stream items:
-
-```typescript
-const page = await client.history.orders({ limit: 50 });
-
-for await (const order of client.history.ordersItems({ limit: 50 })) {
-  console.log(order.order.id, order.fill?.price);
-}
-
-const allOrders = await client.history.ordersAll({ limit: 50 });
-```
-
-Follow `nextPagePath` automatically via `ordersPages`, `ordersItems`, or `ordersAll`.
-
-## Rate limits
-
-The client serializes requests and paces them using Trading 212 rate-limit response headers. On `429` responses it waits and retries automatically — you don't need to manage throttling yourself.
-
-On HTTP errors the SDK throws `T212Error` with `status`, `body`, and optional `rateLimit` metadata.
-
-## Error handling
-
-```typescript
-import { T212, T212Error } from "t212-sdk";
-
-try {
-  await client.orders.get(123);
-} catch (error) {
-  if (error instanceof T212Error) {
-    if (error.isRateLimited) {
-      // retry after error.rateLimit?.reset
-    }
-  }
-}
-```
-
-## Legacy account endpoints
-
-`account.getInfo()` and `account.getCash()` map to older Trading 212 endpoints still used by some integrations. Prefer `account.getSummary()` for new code.
-
-## Requirements
-
-- Node.js 18+
-- Trading 212 Invest or Stocks ISA account with API access enabled
+---
 
 ## Integration tests
 
-Integration tests hit the **demo** environment only. Credentials come from env vars; `T212_ENVIRONMENT=live` is ignored.
+Real API tests against the **demo** environment only — `T212_ENVIRONMENT=live` is ignored.
 
 ```bash
 cp .env.example .env
-# fill in T212_API_KEY and T212_API_SECRET from your demo account
+# T212_API_KEY + T212_API_SECRET from your demo account
 
 npm test
 ```
 
-Optional:
-
-- `T212_TEST_TICKER` — ticker used for write tests (default `AAPL_US_EQ`)
+| Variable | Required | Default |
+|---|---|---|
+| `T212_API_KEY` | yes | — |
+| `T212_API_SECRET` | yes | — |
+| `T212_TEST_TICKER` | no | `AAPL_US_EQ` |
 
 Write tests place a far OTM limit order and cancel it in the same run.
 
-## License
+---
 
-MIT
+## Requirements
+
+- **Node.js 18+** (or any runtime with global `fetch`)
+- Trading 212 **Invest** or **Stocks ISA** with API access enabled
+
+---
+
+## Disclaimer
+
+This is an **unofficial** SDK. Not affiliated with Trading 212.  
+Trading involves risk. Test thoroughly in demo before going live. You are responsible for your trades.
+
+---
+
+<p align="center">
+  <sub>Built with ☕ by <a href="https://github.com/codeledge">codeledge</a> · MIT License</sub>
+</p>

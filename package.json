@@ -1,17 +1,27 @@
 {
   "name": "t212-sdk",
-  "version": "0.1.0",
-  "description": "Fully typed TypeScript SDK for the Trading 212 Public API",
+  "version": "0.1.1",
+  "description": "The developer-first TypeScript SDK for Trading 212 — fully typed, zero deps, built-in rate limiting. Automate orders, positions, and portfolio data.",
   "keywords": [
     "trading212",
+    "trading-212",
     "t212",
+    "t212-sdk",
     "trading",
     "stocks",
+    "equities",
+    "invest",
+    "isa",
     "api",
-    "sdk"
+    "sdk",
+    "typescript",
+    "broker",
+    "fintech",
+    "algorithmic-trading",
+    "portfolio"
   ],
   "license": "MIT",
-  "author": "",
+  "author": "codeledge team (https://github.com/codeledge)",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/codeledge/t212.git"
