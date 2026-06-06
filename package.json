@@ -24,12 +24,12 @@
   "author": "codeledge team (https://github.com/codeledge)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/codeledge/t212.git"
+    "url": "git+https://github.com/codeledge/t212-sdk.git"
   },
   "bugs": {
-    "url": "https://github.com/codeledge/t212/issues"
+    "url": "https://github.com/codeledge/t212-sdk/issues"
   },
-  "homepage": "https://github.com/codeledge/t212#readme",
+  "homepage": "https://github.com/codeledge/t212-sdk#readme",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

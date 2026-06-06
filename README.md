@@ -14,7 +14,7 @@ $$$$$$\   \__/  $$ |\_$$ |  \__/  $$ |         $$$$$$$\  $$$$$$$ |$$ |  $$\
 <p align="center">
   <a href="https://www.npmjs.com/package/t212-sdk"><img src="https://img.shields.io/npm/v/t212-sdk?style=for-the-badge&logo=npm&color=CB3837" alt="npm version"></a>
   <a href="https://www.npmjs.com/package/t212-sdk"><img src="https://img.shields.io/npm/dm/t212-sdk?style=for-the-badge&logo=npm&color=CB3837" alt="npm downloads"></a>
-  <a href="https://github.com/codeledge/t212/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/t212-sdk?style=for-the-badge&color=22C55E" alt="license"></a>
+  <a href="https://github.com/codeledge/t212-sdk/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/t212-sdk?style=for-the-badge&color=22C55E" alt="license"></a>
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-ready-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-18%2B-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" alt="Node 18+"></a>
 </p>
@@ -27,7 +27,7 @@ $$$$$$\   \__/  $$ |\_$$ |  \__/  $$ |         $$$$$$$\  $$$$$$$ |$$ |  $$\
 <p align="center">
   <a href="https://www.npmjs.com/package/t212-sdk"><strong>Install on npm</strong></a> ·
   <a href="https://docs.trading212.com/api">Official API docs</a> ·
-  <a href="https://github.com/codeledge/t212/issues">Report an issue</a>
+  <a href="https://github.com/codeledge/t212-sdk/issues">Report an issue</a>
 </p>
 
 ---
