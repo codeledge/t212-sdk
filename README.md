@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/codeledge/t212-sdk/main/assets/banner.png" alt="t212-sdk" width="640">
+  <img src="https://unpkg.com/t212-sdk/assets/banner.png" alt="t212-sdk" width="640">
 </p>
 
 <p align="center">
