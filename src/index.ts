@@ -6,3 +6,4 @@ export {
   iteratePages,
 } from "./pagination";
 export type * from "./types";
+export * from "./createClientFromEnv";

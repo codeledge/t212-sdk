@@ -47,6 +47,16 @@ export class RateLimiter {
     );
   }
 
+  /** Enforce documented per-endpoint minimum spacing. */
+  noteMinimumInterval(intervalMs: number): void {
+    if (intervalMs > 0) {
+      this.nextAllowedAt = Math.max(
+        this.nextAllowedAt,
+        Date.now() + intervalMs,
+      );
+    }
+  }
+
   async waitUntilAllowed(): Promise<void> {
     const delay = this.nextAllowedAt - Date.now();
     if (delay > 0) {

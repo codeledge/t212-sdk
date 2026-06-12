@@ -1,6 +1,6 @@
 {
   "name": "t212-sdk",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "The developer-first TypeScript SDK for Trading 212 — fully typed, zero deps, built-in rate limiting. Automate orders, positions, and portfolio data.",
   "keywords": [
     "trading212",
@@ -64,10 +64,14 @@
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
-    "tsup": "^8.5.0",
-    "typescript": "^5.8.3",
-    "vitest": "^3.2.4",
+    "@types/node": "^22.15.21",
     "dotenv": "^16.5.0",
-    "@types/node": "^22.15.21"
+    "tsup": "^8.5.0",
+    "tsx": "^4.22.4",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "deverything": "^5.5.1"
   }
 }

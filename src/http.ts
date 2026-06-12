@@ -49,7 +49,14 @@ export class HttpClient {
   }
 
   request<T>(options: HttpRequestOptions): Promise<T> {
-    return this.rateLimiter.schedule(() => this.executeRequest<T>(options));
+    const minIntervalMs = endpointMinIntervalMs(
+      options.path,
+      options.method ?? "GET",
+    );
+
+    return this.rateLimiter.schedule(() =>
+      this.executeRequest<T>(options, 3, minIntervalMs),
+    );
   }
 
   /** Follow `nextPagePath` values returned by paginated list endpoints. */
@@ -65,7 +72,8 @@ export class HttpClient {
 
   private async executeRequest<T>(
     options: HttpRequestOptions,
-    retries = 1,
+    retries = 3,
+    minIntervalMs = 0,
   ): Promise<T> {
     const url = this.buildUrl(options.path, options.query);
     const controller = new AbortController();
@@ -94,7 +102,7 @@ export class HttpClient {
       if (response.status === 429 && retries > 0) {
         this.rateLimiter.noteRateLimited(response.headers);
         await this.rateLimiter.waitUntilAllowed();
-        return this.executeRequest<T>(options, retries - 1);
+        return this.executeRequest<T>(options, retries - 1, minIntervalMs);
       }
 
       if (!response.ok) {
@@ -106,6 +114,7 @@ export class HttpClient {
       }
 
       this.rateLimiter.noteResponse(response.headers);
+      this.rateLimiter.noteMinimumInterval(minIntervalMs);
       return body as T;
     } catch (error) {
       if (error instanceof T212Error) {
@@ -195,6 +204,38 @@ function getErrorMessage(
     default:
       return `Request failed with status ${status}`;
   }
+}
+
+/** Documented Trading 212 minimum spacing — endpoints differ, not one global pace. */
+function endpointMinIntervalMs(path: string, method: HttpMethod): number {
+  if (method === "POST" && /\/equity\/orders\/market$/.test(path)) {
+    return 1_200;
+  }
+
+  if (
+    method === "POST" &&
+    /\/equity\/orders\/(limit|stop|stop_limit)$/.test(path)
+  ) {
+    return 2_000;
+  }
+
+  if (method === "DELETE" && /\/equity\/orders\/\d+/.test(path)) {
+    return 1_200;
+  }
+
+  if (path === "/equity/positions") {
+    return 1_000;
+  }
+
+  if (path === "/equity/orders" || /\/equity\/orders\/\d+$/.test(path)) {
+    return 1_000;
+  }
+
+  if (path === "/equity/account/summary") {
+    return 5_000;
+  }
+
+  return 0;
 }
 
 function parseRateLimitHeaders(headers: Headers): RateLimitInfo | null {
