@@ -95,9 +95,9 @@ console.log(`Order ${order.id} · ${order.status}`);
 | | |
 |---|---|
 | **account** | `getSummary` · `getInfo` · `getCash` |
-| **orders** | `list` · `get` · `placeMarket` · `placeLimit` · `placeStop` · `placeStopLimit` · `cancel` |
+| **orders** | `list` · `get` · `getByTicker` · `placeMarket` · `placeLimit` · `placeStop` · `placeStopLimit` · `cancel` |
 | **instruments** | `list` · `exchanges` · `findByTicker` |
-| **positions** | `list` |
+| **positions** | `list` · `getByTicker` |
 | **history** | paginated + `*All` + async iterators for orders, dividends, transactions |
 | **history.exports** | `list` · `request` |
 
@@ -192,12 +192,37 @@ try {
 | Resource | Methods |
 | --- | --- |
 | `account` | `getSummary`, `getInfo`, `getCash` |
-| `orders` | `list`, `get`, `placeMarket`, `placeLimit`, `placeStop`, `placeStopLimit`, `cancel` |
+| `orders` | `list`, `get`, `getByTicker`, `placeMarket`, `placeLimit`, `placeStop`, `placeStopLimit`, `cancel` |
 | `instruments` | `list`, `exchanges`, `findByTicker` |
-| `positions` | `list` |
+| `positions` | `list`, `getByTicker` |
 | `history` | `orders`, `ordersAll`, `ordersPages`, `ordersItems`, `dividends`, `dividendsAll`, `dividendsItems`, `transactions`, `transactionsAll`, `transactionsItems` |
 | `history.exports` | `list`, `request` |
 | `pies` | deprecated Trading 212 endpoints |
+
+### orders.getByTicker
+
+Fetches all open orders and returns those matching the given ticker.
+
+```ts
+const orders = await client.orders.getByTicker("AAPL_US_EQ");
+// e.g. [{ id: 1, ticker: "AAPL_US_EQ", side: "SELL", limitPrice: 296.49, ... }]
+```
+
+### positions.getByTicker
+
+Fetches all open positions and returns the one matching the given ticker, or `undefined` if not held.
+
+```ts
+const position = await client.positions.getByTicker("AAPL_US_EQ");
+
+if (!position) {
+  console.log("No open position");
+} else {
+  console.log(position.quantityAvailableForTrading); // shares free to trade
+  console.log(position.averagePricePaid);            // weighted avg buy price
+  console.log(position.walletImpact.unrealizedProfitLoss); // unrealized P&L (account currency)
+}
+```
 
 ---
 

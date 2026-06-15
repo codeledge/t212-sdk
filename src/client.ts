@@ -106,6 +106,12 @@ class OrdersResource {
     return this.http.request<Order>({ path: `/equity/orders/${id}` });
   }
 
+  /** GET /equity/orders — returns all open orders for a specific ticker. */
+  async getByTicker(ticker: string): Promise<Order[]> {
+    const orders = await this.list();
+    return orders.filter((o) => o.ticker === ticker);
+  }
+
   /** POST /equity/orders/market */
   async placeMarket(request: MarketOrderRequest): Promise<Order> {
     const response = await this.http.request<Order | { order: Order }>({
@@ -202,6 +208,12 @@ class PositionsResource {
       path: "/equity/positions",
       ...(query ? { query } : {}),
     });
+  }
+
+  /** GET /equity/positions — returns the position for a specific ticker, or undefined. */
+  async getByTicker(ticker: string): Promise<Position | undefined> {
+    const positions = await this.list();
+    return positions.find((p) => p.instrument.ticker === ticker);
   }
 }
 
