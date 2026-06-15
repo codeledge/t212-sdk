@@ -455,3 +455,30 @@ export interface T212ErrorBody {
   error?: string;
   [key: string]: unknown;
 }
+
+export type CandleInterval =
+  | "ONE_MINUTE"
+  | "FIVE_MINUTES"
+  | "TEN_MINUTES"
+  | "FIFTEEN_MINUTES"
+  | "THIRTY_MINUTES"
+  | "ONE_HOUR"
+  | "FOUR_HOURS"
+  | "ONE_DAY"
+  | "ONE_WEEK"
+  | "ONE_MONTH";
+
+export type SessionType = "regular" | "pre" | "after";
+
+export interface Candle {
+  date: Date;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  range: number;
+  rangePct: number;
+  sessionType?: SessionType;
+  interval?: CandleInterval;
+}
