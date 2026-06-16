@@ -1,13 +1,5 @@
-import {
-  HttpClient,
-  normalizeTimeValidity,
-  unwrapOrder,
-} from "./http";
-import {
-  fetchAllPages,
-  iterateAllItems,
-  iteratePages,
-} from "./pagination";
+import { HttpClient, normalizeTimeValidity, unwrapOrder } from "./http";
+import { fetchAllPages, iterateAllItems, iteratePages } from "./pagination";
 import type {
   AccountSummary,
   DuplicatePieRequest,
@@ -233,7 +225,9 @@ class HistoryResource {
   }
 
   /** Fetch every historical order page. */
-  ordersAll(query?: PaginationQuery): Promise<HistoricalOrder[]> {
+  ordersAll(
+    query?: Pick<PaginationQuery, "ticker">,
+  ): Promise<HistoricalOrder[]> {
     return fetchAllPages<HistoricalOrder>(
       this.http,
       "/equity/history/orders",
@@ -242,7 +236,7 @@ class HistoryResource {
   }
 
   /** Iterate paginated historical order responses. */
-  ordersPages(query?: PaginationQuery) {
+  ordersPages(query?: Pick<PaginationQuery, "ticker">) {
     return iteratePages<HistoricalOrder>(
       this.http,
       "/equity/history/orders",
@@ -251,7 +245,7 @@ class HistoryResource {
   }
 
   /** Iterate every historical order item across all pages. */
-  ordersItems(query?: PaginationQuery) {
+  ordersItems(query?: Pick<PaginationQuery, "ticker">) {
     return iterateAllItems<HistoricalOrder>(
       this.http,
       "/equity/history/orders",
