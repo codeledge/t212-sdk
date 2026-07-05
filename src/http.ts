@@ -12,8 +12,8 @@ import type {
 } from "./types";
 
 const BASE_URLS: Record<T212Environment, string> = {
-  demo: "https://demo.trading212.com",
-  live: "https://live.trading212.com",
+  DEMO: "https://demo.trading212.com",
+  LIVE: "https://live.trading212.com",
 };
 
 export type HttpMethod = "GET" | "POST" | "DELETE";
@@ -38,8 +38,7 @@ export class HttpClient {
       throw new Error("apiKey and apiSecret are required");
     }
 
-    const environment = options.environment ?? "demo";
-    this.baseUrl = BASE_URLS[environment];
+    this.baseUrl = BASE_URLS[options.environment];
     this.basePath = options.basePath ?? "/api/v0";
     this.fetchImpl = options.fetch ?? fetch;
     this.timeout = options.timeout ?? 30_000;
@@ -105,6 +104,12 @@ export class HttpClient {
         return this.executeRequest<T>(options, retries - 1, minIntervalMs);
       }
 
+      // Record pacing for every response — including errors — so that failed
+      // requests (e.g. a rejected limit order) don't bypass the per-endpoint
+      // minimum spacing and let a retry loop hammer the API into a 429.
+      this.rateLimiter.noteResponse(response.headers);
+      this.rateLimiter.noteMinimumInterval(minIntervalMs);
+
       if (!response.ok) {
         throw new T212Error(getErrorMessage(response.status, body), {
           status: response.status,
@@ -113,8 +118,6 @@ export class HttpClient {
         });
       }
 
-      this.rateLimiter.noteResponse(response.headers);
-      this.rateLimiter.noteMinimumInterval(minIntervalMs);
       return body as T;
     } catch (error) {
       if (error instanceof T212Error) {

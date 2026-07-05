@@ -1,5 +1,8 @@
+import { z } from "zod";
+
 /** Trading environment. */
-export type T212Environment = "demo" | "live";
+export const T212EnvironmentSchema = z.enum(["DEMO", "LIVE"]);
+export type T212Environment = z.infer<typeof T212EnvironmentSchema>;
 
 /** ISO 4217 currency code. */
 export type CurrencyCode = string;
@@ -7,7 +10,8 @@ export type CurrencyCode = string;
 /** Instrument ticker, e.g. `AAPL_US_EQ`. */
 export type Ticker = string;
 
-export type OrderSide = "BUY" | "SELL";
+export const OrderSideSchema = z.enum(["BUY", "SELL"]);
+export type OrderSide = z.infer<typeof OrderSideSchema>;
 
 export type OrderStatus =
   | "LOCAL"
@@ -82,16 +86,7 @@ export type TaxName =
 export type TransactionType = "WITHDRAW" | "DEPOSIT" | "FEE" | "TRANSFER";
 
 export type ReportStatus =
-  | "Queued"
-  | "Processing"
-  | "Running"
-  | "Canceled"
-  | "Failed"
-  | "Finished";
-
-export type DividendCashAction = "REINVEST" | "TO_ACCOUNT_CASH";
-
-export type PieStatus = "AHEAD" | "ON_TRACK" | "BEHIND";
+  "Queued" | "Processing" | "Running" | "Canceled" | "Failed" | "Finished";
 
 export type TimeEventType =
   | "OPEN"
@@ -163,21 +158,12 @@ export interface AccountSummary {
   investments: Investments;
 }
 
-/** Legacy account info endpoint (`/equity/account/info`). */
-export interface LegacyAccountInfo {
-  id: number;
-  currencyCode: CurrencyCode;
-}
-
-/** Legacy cash endpoint (`/equity/account/cash`). */
-export interface LegacyAccountCash {
-  free: number;
-  total: number;
-  ppl: number;
-  result: number;
-  invested: number;
-  pieCash: number;
-  blocked: boolean | null;
+export interface OrdersFilter {
+  ticker?: Ticker;
+  type?: OrderType;
+  side?: OrderSide;
+  status?: OrderStatus;
+  strategy?: OrderStrategy;
 }
 
 export interface Order {
@@ -366,82 +352,10 @@ export interface RequestReportParams {
   dataIncluded?: ReportDataIncluded;
 }
 
-export interface PieInstrumentShares {
-  [ticker: string]: number;
-}
-
-export interface PieRequest {
-  name: string;
-  icon: string;
-  instrumentShares: PieInstrumentShares;
-  goal?: number;
-  endDate?: string;
-  dividendCashAction?: DividendCashAction;
-}
-
-export interface PieSettings {
-  id: number;
-  name: string;
-  icon: string;
-  goal?: number;
-  endDate?: string;
-  creationDate?: string;
-  dividendCashAction?: DividendCashAction;
-  initialInvestment?: number;
-  instrumentShares?: PieInstrumentShares;
-  publicUrl?: string;
-}
-
-export interface PieResult {
-  id: number;
-  cash?: number;
-  progress?: number;
-  status?: PieStatus;
-  result?: InvestmentResult;
-  dividendDetails?: DividendDetails;
-}
-
-export interface InvestmentResult {
-  priceAvgValue?: number;
-  priceAvgInvestedValue?: number;
-  priceAvgResult?: number;
-  priceAvgResultCoef?: number;
-}
-
-export interface DividendDetails {
-  gained?: number;
-  inCash?: number;
-  reinvested?: number;
-}
-
-export interface PieDetailed extends PieSettings {
-  instruments?: PieInstrumentResult[];
-}
-
-export interface PieInstrumentResult {
-  ticker: Ticker;
-  currentShare?: number;
-  expectedShare?: number;
-  ownedQuantity?: number;
-  result?: InvestmentResult;
-  issues?: InstrumentIssue[];
-}
-
-export interface InstrumentIssue {
-  name: string;
-  severity: "IRREVERSIBLE" | "REVERSIBLE" | "INFORMATIVE";
-}
-
-export interface DuplicatePieRequest {
-  name: string;
-  icon: string;
-}
-
 export interface T212ClientOptions {
   apiKey: string;
   apiSecret: string;
-  /** @default "demo" */
-  environment?: T212Environment;
+  environment: T212Environment;
   /** Custom fetch implementation. Defaults to global `fetch`. */
   fetch?: typeof fetch;
   /** Request timeout in milliseconds. @default 30000 */

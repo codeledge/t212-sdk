@@ -1,61 +1,33 @@
-import { calcFxFee } from "../lib/calcFxFee";
-import { getOrderPrice } from "../lib/getOrderPrice";
-import { round } from "../lib/round";
-import type { AddedCostsResponse } from "../rest/added-costs";
+import { formatPercentage, formatNumber } from "deverything";
+import type { AddedCostsResponse } from "../browserClient/getAddedCosts";
 import type { Order, Position } from "../types";
-
-function orderSide(order: Order): string {
-  if (order.side) {
-    return order.side === "BUY" ? "B" : "S";
-  }
-
-  if (order.quantity !== undefined) {
-    return order.quantity < 0 ? "S" : "B";
-  }
-
-  return "?";
-}
-
-function orderQuantity(order: Order): number {
-  return Math.abs(order.quantity ?? order.orderedQuantity ?? 0);
-}
-
-function formatOrderPrice(order: Order): string {
-  return (getOrderPrice(order)?.toFixed(2) ?? "-").padEnd(8);
-}
+import { formatOrderPrice } from "./formatOrderPrice";
+import { formatOrderQty } from "./formatOrderQty";
+import { formatOrderSide } from "./formatOrderSide";
+import BigNumber from "bignumber.js";
 
 export function formatOrder(
   order: Order,
-  position?: Position,
-  costs?: AddedCostsResponse,
+  options: {
+    cellWidth?: number;
+    position?: Position;
+    costs?: AddedCostsResponse;
+    showCurrency?: boolean;
+  } = {},
 ): string {
-  let line = `${orderSide(order).padEnd(2)} ${formatOrderPrice(order)} ${orderQuantity(order)}`;
+  let line = `${formatOrderSide(order, options)} ${formatOrderQty(order, options)} ${formatOrderPrice(order, options)}`;
 
-  const isSell =
-    order.side === "SELL" ||
-    (order.quantity !== undefined && order.quantity < 0);
+  if (options.position && order.limitPrice != null) {
+    const priceDelta = new BigNumber(order.limitPrice).minus(
+      options.position.averagePricePaid,
+    );
 
-  if (isSell && position && costs && order.limitPrice != null) {
-    const qty = costs.orderQuantity;
-    const rate = costs.exchangeRate.rate;
-    const priceIncrease = round(order.limitPrice - position.averagePricePaid);
-
-    const increase = round(priceIncrease * qty);
-
-    const sellFee = calcFxFee({
-      price: order.limitPrice,
-      quantity: qty,
-    });
-
-    const buyFee = calcFxFee({
-      price: position.averagePricePaid,
-      quantity: qty,
-    });
-
-    const net = round(increase - sellFee - buyFee);
-
-    const netGBP = round(net * rate);
-    line += `x${priceIncrease}=${increase} -${sellFee} (Sell) -${buyFee} (Buy)= ${net} => ${netGBP}GBP`;
+    line +=
+      ` ${formatNumber(priceDelta.decimalPlaces(2).toNumber(), { sign: true })}` +
+      ` (${formatPercentage(
+        priceDelta.dividedBy(options.position.averagePricePaid).toNumber(),
+        { digits: 2 },
+      )})`;
   }
 
   return line;

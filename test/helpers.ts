@@ -14,16 +14,16 @@ export function createTestClient(): T212 {
     );
   }
 
-  if (process.env.T212_ENVIRONMENT === "live") {
+  if (process.env.T212_ENVIRONMENT === "LIVE") {
     console.warn(
-      "[t212 tests] T212_ENVIRONMENT=live is ignored — integration tests always use demo",
+      "[t212 tests] T212_ENVIRONMENT=LIVE is ignored — integration tests always use DEMO",
     );
   }
 
   return new T212({
     apiKey: process.env.T212_API_KEY!,
     apiSecret: process.env.T212_API_SECRET!,
-    environment: "demo",
+    environment: "DEMO",
   });
 }
 

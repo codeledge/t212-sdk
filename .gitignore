@@ -6,5 +6,4 @@ dist/
 .env.*
 !.env.example
 scripts/
-rest/
 cli/

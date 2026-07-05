@@ -1,4 +1,4 @@
-import type { OhlcCandle } from "../rest/ohlc";
+import type { OhlcCandle } from "../browserClient/getOhlc";
 import type { Candle } from "../types";
 
 export function parseCandle(candle: OhlcCandle): Candle {

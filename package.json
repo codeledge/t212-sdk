@@ -59,22 +59,24 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "prepublishOnly": "npm run build"
+    "test": "bun test",
+    "prepublishOnly": "bun run build"
   },
   "devDependencies": {
+    "@types/bun": "latest",
     "@types/minimist": "^1.2.5",
-    "@types/node": "^22.15.21",
-    "dotenv": "^16.5.0",
+    "playwright": "^1.61.1",
     "prettier": "^3.8.4",
     "tsup": "^8.5.0",
-    "tsx": "^4.22.4",
-    "typescript": "^5.8.3",
-    "vitest": "^3.2.4"
+    "typescript": "^5.8.3"
   },
   "dependencies": {
-    "deverything": "^5.5.1",
-    "minimist": "^1.2.8"
+    "@prisma/client": "^7.8.0",
+    "bignumber.js": "^11.1.4",
+    "date-fns": "^4.4.0",
+    "deverything": "^5.5.2",
+    "minimist": "^1.2.8",
+    "prisma": "^7.8.0",
+    "zod": "^4.4.3"
   }
 }

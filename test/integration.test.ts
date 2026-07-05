@@ -1,11 +1,7 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import type { Order } from "../src/index";
 import { T212, T212Error } from "../src/index";
-import {
-  createTestClient,
-  getMissingEnvVars,
-  getTestTicker,
-} from "./helpers";
+import { createTestClient, getMissingEnvVars, getTestTicker } from "./helpers";
 
 const hasCredentials = getMissingEnvVars().length === 0;
 const describeIntegration = hasCredentials ? describe : describe.skip;
@@ -26,7 +22,7 @@ describeIntegration("t212 integration (demo only)", () => {
     }
 
     try {
-      await client.orders.cancel(placedOrderId);
+      await client.openOrder.cancel(placedOrderId);
     } catch (error) {
       if (
         error instanceof T212Error &&
@@ -49,31 +45,17 @@ describeIntegration("t212 integration (demo only)", () => {
       expect(summary.investments.currentValue).toBeTypeOf("number");
     });
 
-    it("gets legacy account info", async () => {
-      const info = await client.account.getInfo();
-
-      expect(info.id).toBeTypeOf("number");
-      expect(info.currencyCode).toBeTruthy();
-    });
-
-    it("gets legacy account cash", async () => {
-      const cash = await client.account.getCash();
-
-      expect(cash.free).toBeTypeOf("number");
-      expect(cash.total).toBeTypeOf("number");
-    });
-
     it("lists instruments and finds the test ticker", async () => {
-      const instruments = await client.instruments.list();
+      const instruments = await client.instrument.getMany();
 
       expect(instruments.length).toBeGreaterThan(0);
 
-      const instrument = await client.instruments.findByTicker(ticker);
+      const instrument = await client.instrument.getOne({ ticker });
       expect(instrument?.ticker).toBe(ticker);
     });
 
     it("lists exchanges", async () => {
-      const exchanges = await client.instruments.exchanges();
+      const exchanges = await client.exchange.getMany();
 
       expect(exchanges.length).toBeGreaterThan(0);
       expect(exchanges[0]?.id).toBeTypeOf("number");
@@ -81,40 +63,37 @@ describeIntegration("t212 integration (demo only)", () => {
     });
 
     it("lists open positions", async () => {
-      const positions = await client.positions.list();
+      const positions = await client.position.getMany();
 
       expect(Array.isArray(positions)).toBe(true);
     });
 
     it("lists pending orders", async () => {
-      const orders = await client.orders.list();
+      const orders = await client.openOrder.getMany();
 
       expect(Array.isArray(orders)).toBe(true);
     });
 
-    it("reads paginated order history", async () => {
-      const page = await client.history.orders({ limit: 5 });
+    it("reads closed order history", async () => {
+      const orders = await client.closedOrder.getMany();
 
-      expect(Array.isArray(page.items)).toBe(true);
-      expect(
-        page.nextPagePath === null || typeof page.nextPagePath === "string",
-      ).toBe(true);
+      expect(Array.isArray(orders)).toBe(true);
     });
 
-    it("reads paginated dividend history", async () => {
-      const page = await client.history.dividends({ limit: 5 });
+    it("reads dividend history", async () => {
+      const dividends = await client.dividend.getMany({ limit: 5 });
 
-      expect(Array.isArray(page.items)).toBe(true);
+      expect(Array.isArray(dividends)).toBe(true);
     });
 
-    it("reads paginated transaction history", async () => {
-      const page = await client.history.transactions({ limit: 5 });
+    it("reads transaction history", async () => {
+      const transactions = await client.transaction.getMany({ limit: 5 });
 
-      expect(Array.isArray(page.items)).toBe(true);
+      expect(Array.isArray(transactions)).toBe(true);
     });
 
     it("lists export reports", async () => {
-      const reports = await client.history.exports.list();
+      const reports = await client.export.getReports();
 
       expect(Array.isArray(reports)).toBe(true);
     });
@@ -122,7 +101,7 @@ describeIntegration("t212 integration (demo only)", () => {
 
   describe("write operations", () => {
     it("places a far OTM limit order, reads it, then cancels it", async () => {
-      const order = await client.orders.placeLimit({
+      const order = await client.openOrder.createLimit({
         ticker,
         quantity: 0.01,
         limitPrice: 0.01,
@@ -135,13 +114,13 @@ describeIntegration("t212 integration (demo only)", () => {
       expect(order.ticker).toBe(ticker);
       expect(order.type).toBe("LIMIT");
 
-      const fetched = await client.orders.get(order.id);
+      const fetched = await client.openOrder.getOne(order.id);
       expect(fetched.id).toBe(order.id);
 
-      const openOrders = await client.orders.list();
+      const openOrders = await client.openOrder.getMany();
       expect(openOrders.some((item: Order) => item.id === order.id)).toBe(true);
 
-      const cancelled = await client.orders.cancel(order.id);
+      const cancelled = await client.openOrder.cancel(order.id);
       expect(cancelled.id).toBe(order.id);
 
       placedOrderId = undefined;

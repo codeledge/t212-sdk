@@ -1,23 +1,19 @@
 import { HttpClient, normalizeTimeValidity, unwrapOrder } from "./http";
-import { fetchAllPages, iterateAllItems, iteratePages } from "./pagination";
+import { fetchAllPages } from "./pagination";
+import { isExchangeOpen, isWorkingScheduleOpen } from "./lib/isExchangeOpen";
 import type {
   AccountSummary,
-  DuplicatePieRequest,
   EnqueuedReport,
   Exchange,
   HistoricalOrder,
   HistoryDividendItem,
   HistoryTransactionItem,
-  LegacyAccountCash,
-  LegacyAccountInfo,
   LimitOrderRequest,
   MarketOrderRequest,
   Order,
+  OrdersFilter,
   PaginatedResponse,
   PaginationQuery,
-  PieDetailed,
-  PieRequest,
-  PieSettings,
   Position,
   PositionsQuery,
   Report,
@@ -25,27 +21,34 @@ import type {
   StopLimitOrderRequest,
   StopOrderRequest,
   T212ClientOptions,
+  Ticker,
   TradableInstrument,
 } from "./types";
 
 export class T212 {
   readonly account: AccountResource;
-  readonly orders: OrdersResource;
-  readonly instruments: InstrumentsResource;
-  readonly positions: PositionsResource;
-  readonly history: HistoryResource;
-  readonly pies: PiesResource;
+  readonly openOrder: OpenOrderResource;
+  readonly closedOrder: ClosedOrderResource;
+  readonly instrument: InstrumentResource;
+  readonly exchange: ExchangeResource;
+  readonly position: PositionResource;
+  readonly dividend: DividendResource;
+  readonly transaction: TransactionResource;
+  readonly export: ExportResource;
 
   private readonly http: HttpClient;
 
   constructor(options: T212ClientOptions) {
     this.http = new HttpClient(options);
     this.account = new AccountResource(this.http);
-    this.orders = new OrdersResource(this.http);
-    this.instruments = new InstrumentsResource(this.http);
-    this.positions = new PositionsResource(this.http);
-    this.history = new HistoryResource(this.http);
-    this.pies = new PiesResource(this.http);
+    this.openOrder = new OpenOrderResource(this.http);
+    this.closedOrder = new ClosedOrderResource(this.http);
+    this.exchange = new ExchangeResource(this.http);
+    this.instrument = new InstrumentResource(this.http, this.exchange);
+    this.position = new PositionResource(this.http);
+    this.dividend = new DividendResource(this.http);
+    this.transaction = new TransactionResource(this.http);
+    this.export = new ExportResource(this.http);
   }
 
   /** Create a client instance. Alias for `new T212(options)`. */
@@ -63,49 +66,30 @@ class AccountResource {
       path: "/equity/account/summary",
     });
   }
-
-  /**
-   * Legacy endpoint retained for compatibility with older integrations.
-   * GET /equity/account/info
-   */
-  getInfo(): Promise<LegacyAccountInfo> {
-    return this.http.request<LegacyAccountInfo>({
-      path: "/equity/account/info",
-    });
-  }
-
-  /**
-   * Legacy endpoint retained for compatibility with older integrations.
-   * GET /equity/account/cash
-   */
-  getCash(): Promise<LegacyAccountCash> {
-    return this.http.request<LegacyAccountCash>({
-      path: "/equity/account/cash",
-    });
-  }
 }
 
-class OrdersResource {
+class OpenOrderResource {
   constructor(private readonly http: HttpClient) {}
 
-  /** GET /equity/orders */
-  list(): Promise<Order[]> {
-    return this.http.request<Order[]>({ path: "/equity/orders" });
+  /** GET /equity/orders — currently open/pending orders. */
+  async getMany(filter?: OrdersFilter): Promise<Order[]> {
+    const orders = await this.http.request<Order[]>({ path: "/equity/orders" });
+    if (!filter) return orders;
+    return orders.filter(
+      (o) =>
+        (filter.ticker === undefined || o.ticker === filter.ticker) &&
+        (filter.type === undefined || o.type === filter.type) &&
+        (filter.side === undefined || o.side === filter.side) &&
+        (filter.status === undefined || o.status === filter.status) &&
+        (filter.strategy === undefined || o.strategy === filter.strategy),
+    );
   }
 
-  /** GET /equity/orders/{id} */
-  get(id: number): Promise<Order> {
+  getOne(id: number): Promise<Order> {
     return this.http.request<Order>({ path: `/equity/orders/${id}` });
   }
 
-  /** GET /equity/orders — returns all open orders for a specific ticker. */
-  async getByTicker(ticker: string): Promise<Order[]> {
-    const orders = await this.list();
-    return orders.filter((o) => o.ticker === ticker);
-  }
-
-  /** POST /equity/orders/market */
-  async placeMarket(request: MarketOrderRequest): Promise<Order> {
+  async createMarket(request: MarketOrderRequest): Promise<Order> {
     const response = await this.http.request<Order | { order: Order }>({
       method: "POST",
       path: "/equity/orders/market",
@@ -115,8 +99,7 @@ class OrdersResource {
     return unwrapOrder(response);
   }
 
-  /** POST /equity/orders/limit */
-  async placeLimit(request: LimitOrderRequest): Promise<Order> {
+  async createLimit(request: LimitOrderRequest): Promise<Order> {
     const response = await this.http.request<Order | { order: Order }>({
       method: "POST",
       path: "/equity/orders/limit",
@@ -129,8 +112,7 @@ class OrdersResource {
     return unwrapOrder(response);
   }
 
-  /** POST /equity/orders/stop */
-  async placeStop(request: StopOrderRequest): Promise<Order> {
+  async createStop(request: StopOrderRequest): Promise<Order> {
     const response = await this.http.request<Order | { order: Order }>({
       method: "POST",
       path: "/equity/orders/stop",
@@ -143,8 +125,7 @@ class OrdersResource {
     return unwrapOrder(response);
   }
 
-  /** POST /equity/orders/stop_limit */
-  async placeStopLimit(request: StopLimitOrderRequest): Promise<Order> {
+  async createStopLimit(request: StopLimitOrderRequest): Promise<Order> {
     const response = await this.http.request<Order | { order: Order }>({
       method: "POST",
       path: "/equity/orders/stop_limit",
@@ -157,7 +138,6 @@ class OrdersResource {
     return unwrapOrder(response);
   }
 
-  /** DELETE /equity/orders/{id} */
   async cancel(id: number): Promise<Order> {
     const response = await this.http.request<Order | { order: Order }>({
       method: "DELETE",
@@ -166,212 +146,170 @@ class OrdersResource {
 
     return unwrapOrder(response);
   }
+
+  async cancelMany({ ids }: { ids: number[] }): Promise<Order[]> {
+    return Promise.all(ids.map((id) => this.cancel(id)));
+  }
 }
 
-class InstrumentsResource {
+class ClosedOrderResource {
   constructor(private readonly http: HttpClient) {}
 
-  /** GET /equity/metadata/instruments */
-  list(): Promise<TradableInstrument[]> {
-    return this.http.request<TradableInstrument[]>({
-      path: "/equity/metadata/instruments",
-    });
-  }
-
-  /** GET /equity/metadata/exchanges */
-  exchanges(): Promise<Exchange[]> {
-    return this.http.request<Exchange[]>({
-      path: "/equity/metadata/exchanges",
-    });
-  }
-
-  async findByTicker(ticker: string): Promise<TradableInstrument | undefined> {
-    const instruments = await this.list();
-    return instruments.find((instrument) => instrument.ticker === ticker);
-  }
-}
-
-class PositionsResource {
-  constructor(private readonly http: HttpClient) {}
-
-  /** GET /equity/positions */
-  list(query?: PositionsQuery): Promise<Position[]> {
-    return this.http.request<Position[]>({
-      path: "/equity/positions",
-      ...(query ? { query } : {}),
-    });
-  }
-
-  /** GET /equity/positions — returns the position for a specific ticker, or undefined. */
-  async getByTicker(ticker: string): Promise<Position | undefined> {
-    const positions = await this.list();
-    return positions.find((p) => p.instrument.ticker === ticker);
-  }
-}
-
-class HistoryResource {
-  readonly exports: HistoryExportsResource;
-
-  constructor(private readonly http: HttpClient) {
-    this.exports = new HistoryExportsResource(http);
-  }
-
-  /** GET /equity/history/orders */
-  orders(query?: PaginationQuery): Promise<PaginatedResponse<HistoricalOrder>> {
-    return this.http.request<PaginatedResponse<HistoricalOrder>>({
-      path: "/equity/history/orders",
-      ...(query ? { query } : {}),
-    });
-  }
-
-  /** Fetch every historical order page. */
-  ordersAll(
-    query?: Pick<PaginationQuery, "ticker">,
-  ): Promise<HistoricalOrder[]> {
+  getMany(query?: Pick<PaginationQuery, "ticker">): Promise<HistoricalOrder[]> {
     return fetchAllPages<HistoricalOrder>(
       this.http,
       "/equity/history/orders",
       query,
     );
   }
+}
 
-  /** Iterate paginated historical order responses. */
-  ordersPages(query?: Pick<PaginationQuery, "ticker">) {
-    return iteratePages<HistoricalOrder>(
-      this.http,
-      "/equity/history/orders",
-      query,
+class InstrumentResource {
+  constructor(
+    private readonly http: HttpClient,
+    private readonly exchangeResource: ExchangeResource,
+  ) {}
+
+  async getMany(options?: {
+    isExchangeOpen?: boolean;
+    exchangeId?: number;
+  }): Promise<TradableInstrument[]> {
+    const instruments = await this.http.request<TradableInstrument[]>({
+      path: "/equity/metadata/instruments",
+    });
+
+    let filteredInstruments = instruments;
+    const needsExchanges = options?.exchangeId || options?.isExchangeOpen;
+    const exchanges = needsExchanges
+      ? await this.exchangeResource.getMany()
+      : undefined;
+
+    if (options?.exchangeId) {
+      const exchange = exchanges?.find(
+        (item) => item.id === options.exchangeId,
+      );
+      const exchangeScheduleIds = new Set(
+        exchange?.workingSchedules.map((schedule) => schedule.id) ?? [],
+      );
+
+      filteredInstruments = filteredInstruments.filter((instrument) =>
+        exchangeScheduleIds.has(instrument.workingScheduleId),
+      );
+    }
+
+    if (options?.isExchangeOpen) {
+      const scheduleById = new Map(
+        exchanges!
+          .flatMap((exchange) => exchange.workingSchedules)
+          .map((schedule) => [schedule.id, schedule] as const),
+      );
+
+      filteredInstruments = filteredInstruments.filter((instrument) => {
+        const schedule = scheduleById.get(instrument.workingScheduleId);
+        return (
+          schedule !== undefined &&
+          isWorkingScheduleOpen(schedule) === options.isExchangeOpen
+        );
+      });
+    }
+
+    return filteredInstruments;
+  }
+
+  async getOne(
+    query: { ticker: Ticker } | { name: string } | { id: string },
+  ): Promise<TradableInstrument | undefined> {
+    const instruments = await this.getMany();
+    return instruments.find((instrument) =>
+      "ticker" in query
+        ? instrument.ticker === query.ticker
+        : "name" in query
+          ? instrument.name === query.name
+          : instrument.id === query.id,
+    );
+  }
+}
+
+class ExchangeResource {
+  constructor(private readonly http: HttpClient) {}
+
+  /** GET /equity/metadata/exchanges */
+  async getMany(options?: { isOpen?: boolean }): Promise<Exchange[]> {
+    const exchanges = await this.http.request<Exchange[]>({
+      path: "/equity/metadata/exchanges",
+    });
+
+    if (options?.isOpen === undefined) return exchanges;
+    return exchanges.filter(
+      (exchange) => isExchangeOpen(exchange) === options.isOpen,
     );
   }
 
-  /** Iterate every historical order item across all pages. */
-  ordersItems(query?: Pick<PaginationQuery, "ticker">) {
-    return iterateAllItems<HistoricalOrder>(
-      this.http,
-      "/equity/history/orders",
-      query,
+  async getOne(
+    query: { id: number } | { name: string },
+  ): Promise<Exchange | undefined> {
+    const exchanges = await this.getMany();
+    return exchanges.find((exchange) =>
+      "id" in query ? exchange.id === query.id : exchange.name === query.name,
     );
   }
+}
 
-  /** GET /equity/history/dividends */
-  dividends(
-    query?: PaginationQuery,
-  ): Promise<PaginatedResponse<HistoryDividendItem>> {
-    return this.http.request<PaginatedResponse<HistoryDividendItem>>({
-      path: "/equity/history/dividends",
+class PositionResource {
+  constructor(private readonly http: HttpClient) {}
+
+  /** GET /equity/positions */
+  getMany(query?: PositionsQuery): Promise<Position[]> {
+    return this.http.request<Position[]>({
+      path: "/equity/positions",
       ...(query ? { query } : {}),
     });
   }
 
-  dividendsAll(query?: PaginationQuery): Promise<HistoryDividendItem[]> {
+  async getOne(query: { ticker: Ticker }): Promise<Position | undefined> {
+    const positions = await this.getMany(query);
+    return positions.find((p) => p.instrument.ticker === query.ticker);
+  }
+}
+
+class DividendResource {
+  constructor(private readonly http: HttpClient) {}
+
+  getMany(query?: PaginationQuery): Promise<HistoryDividendItem[]> {
     return fetchAllPages<HistoryDividendItem>(
       this.http,
       "/equity/history/dividends",
       query,
     );
   }
+}
 
-  dividendsItems(query?: PaginationQuery) {
-    return iterateAllItems<HistoryDividendItem>(
-      this.http,
-      "/equity/history/dividends",
-      query,
-    );
-  }
+class TransactionResource {
+  constructor(private readonly http: HttpClient) {}
 
-  /** GET /equity/history/transactions */
-  transactions(
-    query?: PaginationQuery,
-  ): Promise<PaginatedResponse<HistoryTransactionItem>> {
-    return this.http.request<PaginatedResponse<HistoryTransactionItem>>({
-      path: "/equity/history/transactions",
-      ...(query ? { query } : {}),
-    });
-  }
-
-  transactionsAll(query?: PaginationQuery): Promise<HistoryTransactionItem[]> {
+  getMany(query?: PaginationQuery): Promise<HistoryTransactionItem[]> {
     return fetchAllPages<HistoryTransactionItem>(
       this.http,
       "/equity/history/transactions",
       query,
     );
   }
-
-  transactionsItems(query?: PaginationQuery) {
-    return iterateAllItems<HistoryTransactionItem>(
-      this.http,
-      "/equity/history/transactions",
-      query,
-    );
-  }
 }
 
-class HistoryExportsResource {
+class ExportResource {
   constructor(private readonly http: HttpClient) {}
 
-  /** GET /equity/history/exports */
-  list(): Promise<Report[]> {
+  getReports(): Promise<Report[]> {
     return this.http.request<Report[]>({
       path: "/equity/history/exports",
     });
   }
 
-  /** POST /equity/history/exports */
-  request(params: RequestReportParams): Promise<EnqueuedReport> {
+  enqueueReport(params: RequestReportParams): Promise<EnqueuedReport> {
     return this.http.request<EnqueuedReport>({
       method: "POST",
       path: "/equity/history/exports",
       body: params,
-    });
-  }
-}
-
-/** @deprecated Pies API is deprecated by Trading 212. */
-class PiesResource {
-  constructor(private readonly http: HttpClient) {}
-
-  /** GET /equity/pies */
-  list(): Promise<PieSettings[]> {
-    return this.http.request<PieSettings[]>({ path: "/equity/pies" });
-  }
-
-  /** GET /equity/pies/{id} */
-  get(id: number): Promise<PieDetailed> {
-    return this.http.request<PieDetailed>({ path: `/equity/pies/${id}` });
-  }
-
-  /** POST /equity/pies */
-  create(request: PieRequest): Promise<PieSettings> {
-    return this.http.request<PieSettings>({
-      method: "POST",
-      path: "/equity/pies",
-      body: request,
-    });
-  }
-
-  /** POST /equity/pies/{id} */
-  update(id: number, request: PieRequest): Promise<PieSettings> {
-    return this.http.request<PieSettings>({
-      method: "POST",
-      path: `/equity/pies/${id}`,
-      body: request,
-    });
-  }
-
-  /** DELETE /equity/pies/{id} */
-  delete(id: number): Promise<void> {
-    return this.http.request<void>({
-      method: "DELETE",
-      path: `/equity/pies/${id}`,
-    });
-  }
-
-  /** POST /equity/pies/{id}/duplicate */
-  duplicate(id: number, request: DuplicatePieRequest): Promise<PieSettings> {
-    return this.http.request<PieSettings>({
-      method: "POST",
-      path: `/equity/pies/${id}/duplicate`,
-      body: request,
     });
   }
 }

@@ -34,7 +34,7 @@ You shouldn't need to reverse-engineer HTTP quirks, guess response shapes, or ba
 | **Fully typed** | Orders, positions, instruments, history — autocomplete everywhere |
 | **Zero dependencies** | Native `fetch`. No axios, no bloat. ~15KB bundled |
 | **Rate limits handled** | Serial queue + header-aware pacing + auto-retry on `429` |
-| **Paper & live** | Flip `environment: "demo"` or `"live"` — same API surface |
+| **Paper & live** | Flip `environment: "DEMO"` or `"LIVE"` — same API surface |
 | **Pagination built-in** | One page, all pages, or async iterators — your call |
 | **ESM + CJS** | Works in Node 18+, Bun, modern bundlers |
 
@@ -70,7 +70,7 @@ import { T212 } from "t212-sdk";
 const client = new T212({
   apiKey: process.env.T212_API_KEY!,
   apiSecret: process.env.T212_API_SECRET!,
-  environment: "demo", // paper trading — swap to "live" when ready
+  environment: "DEMO", // paper trading — swap to "LIVE" when ready
 });
 
 // Account snapshot
@@ -78,7 +78,7 @@ const summary = await client.account.getSummary();
 console.log(`Portfolio value: ${summary.totalValue} ${summary.currency}`);
 
 // Place a fractional market order
-const order = await client.orders.placeMarket({
+const order = await client.openOrder.createMarket({
   ticker: "AAPL_US_EQ",
   quantity: 0.1,
 });
@@ -94,12 +94,15 @@ console.log(`Order ${order.id} · ${order.status}`);
 
 | | |
 |---|---|
-| **account** | `getSummary` · `getInfo` · `getCash` |
-| **orders** | `list` · `get` · `getByTicker` · `placeMarket` · `placeLimit` · `placeStop` · `placeStopLimit` · `cancel` |
-| **instruments** | `list` · `exchanges` · `findByTicker` |
-| **positions** | `list` · `getByTicker` |
-| **history** | paginated + `*All` + async iterators for orders, dividends, transactions |
-| **history.exports** | `list` · `request` |
+| **account** | `getSummary` |
+| **openOrder** | `getMany` · `getOne` · `createMarket` · `createLimit` · `createStop` · `createStopLimit` · `cancel` · `cancelMany` |
+| **closedOrder** | `getMany` |
+| **instrument** | `getMany` · `getOne` |
+| **exchange** | `getMany` · `getOne` |
+| **position** | `getMany` · `getOne` |
+| **dividend** | `getMany` |
+| **transaction** | `getMany` |
+| **export** | `getReports` · `enqueueReport` |
 
 ---
 
@@ -111,7 +114,7 @@ Trading 212 uses HTTP Basic auth:
 |---|---|
 | `apiKey` | Username |
 | `apiSecret` | Password |
-| `environment` | `"demo"` → `demo.trading212.com` · `"live"` → `live.trading212.com` |
+| `environment` | `"DEMO"` → `demo.trading212.com` · `"LIVE"` → `live.trading212.com` |
 
 Always test in **demo** first. Real money lives on **live**.
 
@@ -123,7 +126,7 @@ Positive `quantity` = **buy**. Negative = **sell**. Fractional shares supported.
 
 ```typescript
 // Limit buy — expires end of day
-await client.orders.placeLimit({
+await client.openOrder.createLimit({
   ticker: "AAPL_US_EQ",
   quantity: 1,
   limitPrice: 150,
@@ -131,7 +134,7 @@ await client.orders.placeLimit({
 });
 
 // Stop-loss sell
-await client.orders.placeStop({
+await client.openOrder.createStop({
   ticker: "AAPL_US_EQ",
   quantity: -1,
   stopPrice: 140,
@@ -139,26 +142,21 @@ await client.orders.placeStop({
 });
 
 // Cancel
-await client.orders.cancel(orderId);
+await client.openOrder.cancel(orderId);
 ```
 
 ---
 
 ## Pagination
 
-Historical data is cursor-paginated. Pick your style:
+Historical data (`closedOrder`, `dividend`, `transaction`) is cursor-paginated
+under the hood — `getMany()` walks every page for you and returns the full
+array:
 
 ```typescript
-// Single page
-const page = await client.history.orders({ limit: 50 });
-
-// Every item, all pages
-const all = await client.history.ordersAll({ limit: 50 });
-
-// Stream — memory friendly
-for await (const { order, fill } of client.history.ordersItems({ limit: 50 })) {
-  console.log(order.id, fill?.price);
-}
+const orders = await client.closedOrder.getMany({ ticker: "AAPL_US_EQ" });
+const dividends = await client.dividend.getMany();
+const transactions = await client.transaction.getMany();
 ```
 
 ---
@@ -177,7 +175,7 @@ You write business logic. The SDK stays out of the way.
 import { T212Error } from "t212-sdk";
 
 try {
-  await client.orders.get(123);
+  await client.openOrder.getOne(123);
 } catch (error) {
   if (error instanceof T212Error && error.isRateLimited) {
     // Rare — SDK retries automatically; this is the escape hatch
@@ -191,29 +189,31 @@ try {
 
 | Resource | Methods |
 | --- | --- |
-| `account` | `getSummary`, `getInfo`, `getCash` |
-| `orders` | `list`, `get`, `getByTicker`, `placeMarket`, `placeLimit`, `placeStop`, `placeStopLimit`, `cancel` |
-| `instruments` | `list`, `exchanges`, `findByTicker` |
-| `positions` | `list`, `getByTicker` |
-| `history` | `orders`, `ordersAll`, `ordersPages`, `ordersItems`, `dividends`, `dividendsAll`, `dividendsItems`, `transactions`, `transactionsAll`, `transactionsItems` |
-| `history.exports` | `list`, `request` |
-| `pies` | deprecated Trading 212 endpoints |
+| `account` | `getSummary` |
+| `openOrder` | `getMany` (filter by ticker/type/side/status/strategy), `getOne`, `createMarket`, `createLimit`, `createStop`, `createStopLimit`, `cancel`, `cancelMany` |
+| `closedOrder` | `getMany` |
+| `instrument` | `getMany`, `getOne` |
+| `exchange` | `getMany` (supports `isOpen` filter), `getOne` |
+| `position` | `getMany`, `getOne` |
+| `dividend` | `getMany` |
+| `transaction` | `getMany` |
+| `export` | `getReports`, `enqueueReport` |
 
-### orders.getByTicker
+### openOrder.getMany
 
-Fetches all open orders and returns those matching the given ticker.
+Fetches currently open/pending orders, optionally filtered by ticker/type/side/status/strategy.
 
 ```ts
-const orders = await client.orders.getByTicker("AAPL_US_EQ");
+const orders = await client.openOrder.getMany({ ticker: "AAPL_US_EQ" });
 // e.g. [{ id: 1, ticker: "AAPL_US_EQ", side: "SELL", limitPrice: 296.49, ... }]
 ```
 
-### positions.getByTicker
+### position.getOne
 
 Fetches all open positions and returns the one matching the given ticker, or `undefined` if not held.
 
 ```ts
-const position = await client.positions.getByTicker("AAPL_US_EQ");
+const position = await client.position.getOne({ ticker: "AAPL_US_EQ" });
 
 if (!position) {
   console.log("No open position");
@@ -228,7 +228,7 @@ if (!position) {
 
 ## Integration tests
 
-Real API tests against the **demo** environment only — `T212_ENVIRONMENT=live` is ignored.
+Real API tests against the **demo** environment only — `T212_ENVIRONMENT=LIVE` is ignored.
 
 ```bash
 cp .env.example .env

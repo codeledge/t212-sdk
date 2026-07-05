@@ -1,18 +1,19 @@
+import { z } from "zod";
 import { T212 } from "./client";
-import type { T212Environment } from "./types";
+import { T212EnvironmentSchema } from "./types";
+
+const EnvSchema = z.object({
+  T212_API_KEY: z.string().min(1),
+  T212_API_SECRET: z.string().min(1),
+  T212_ENVIRONMENT: T212EnvironmentSchema,
+});
 
 export function createClientFromEnv(): T212 {
-  const apiKey = process.env.T212_API_KEY;
-  const apiSecret = process.env.T212_API_SECRET;
-
-  if (!apiKey || !apiSecret) {
-    throw new Error(
-      "Missing T212_API_KEY or T212_API_SECRET. Copy .env.example to .env and fill in your credentials.",
-    );
-  }
-
-  const environment: T212Environment =
-    process.env.T212_ENVIRONMENT === "live" ? "live" : "demo";
+  const {
+    T212_API_KEY: apiKey,
+    T212_API_SECRET: apiSecret,
+    T212_ENVIRONMENT: environment,
+  } = EnvSchema.parse(process.env);
 
   return new T212({ apiKey, apiSecret, environment });
 }
