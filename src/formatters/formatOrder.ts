@@ -13,6 +13,7 @@ export function formatOrder(
     position?: Position;
     costs?: AddedCostsResponse;
     showCurrency?: boolean;
+    showInstrument?: boolean;
   } = {},
 ): string {
   let line = `${formatOrderSide(order, options)} ${formatOrderQty(order, options)} ${formatOrderPrice(order, options)}`;
@@ -28,6 +29,10 @@ export function formatOrder(
         priceDelta.dividedBy(options.position.averagePricePaid).toNumber(),
         { digits: 2 },
       )})`;
+  }
+
+  if (options.showInstrument) {
+    line += ` ${order.ticker} ${order.instrument?.name}`;
   }
 
   return line;

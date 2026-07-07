@@ -1,6 +1,8 @@
 import { HttpClient, normalizeTimeValidity, unwrapOrder } from "./http";
+import { isSameDay } from "date-fns";
 import { fetchAllPages } from "./pagination";
 import { isExchangeOpen, isWorkingScheduleOpen } from "./lib/isExchangeOpen";
+import { getHistoricalOrderTimestamp } from "./lib/getHistoricalOrderTimestamp";
 import type {
   AccountSummary,
   EnqueuedReport,
@@ -12,7 +14,7 @@ import type {
   MarketOrderRequest,
   Order,
   OrdersFilter,
-  PaginatedResponse,
+  OrderSide,
   PaginationQuery,
   Position,
   PositionsQuery,
@@ -26,53 +28,26 @@ import type {
 } from "./types";
 
 export class T212 {
-  readonly account: AccountResource;
-  readonly openOrder: OpenOrderResource;
-  readonly closedOrder: ClosedOrderResource;
-  readonly instrument: InstrumentResource;
-  readonly exchange: ExchangeResource;
-  readonly position: PositionResource;
-  readonly dividend: DividendResource;
-  readonly transaction: TransactionResource;
-  readonly export: ExportResource;
-
   private readonly http: HttpClient;
 
   constructor(options: T212ClientOptions) {
     this.http = new HttpClient(options);
-    this.account = new AccountResource(this.http);
-    this.openOrder = new OpenOrderResource(this.http);
-    this.closedOrder = new ClosedOrderResource(this.http);
-    this.exchange = new ExchangeResource(this.http);
-    this.instrument = new InstrumentResource(this.http, this.exchange);
-    this.position = new PositionResource(this.http);
-    this.dividend = new DividendResource(this.http);
-    this.transaction = new TransactionResource(this.http);
-    this.export = new ExportResource(this.http);
   }
 
   /** Create a client instance. Alias for `new T212(options)`. */
   static create(options: T212ClientOptions): T212 {
     return new T212(options);
   }
-}
-
-class AccountResource {
-  constructor(private readonly http: HttpClient) {}
 
   /** GET /equity/account/summary */
-  getSummary(): Promise<AccountSummary> {
+  getAccountSummary(): Promise<AccountSummary> {
     return this.http.request<AccountSummary>({
       path: "/equity/account/summary",
     });
   }
-}
-
-class OpenOrderResource {
-  constructor(private readonly http: HttpClient) {}
 
   /** GET /equity/orders — currently open/pending orders. */
-  async getMany(filter?: OrdersFilter): Promise<Order[]> {
+  async getOpenOrders(filter?: OrdersFilter): Promise<Order[]> {
     const orders = await this.http.request<Order[]>({ path: "/equity/orders" });
     if (!filter) return orders;
     return orders.filter(
@@ -85,11 +60,11 @@ class OpenOrderResource {
     );
   }
 
-  getOne(id: number): Promise<Order> {
+  getOpenOrder(id: number): Promise<Order> {
     return this.http.request<Order>({ path: `/equity/orders/${id}` });
   }
 
-  async createMarket(request: MarketOrderRequest): Promise<Order> {
+  async createMarketOrder(request: MarketOrderRequest): Promise<Order> {
     const response = await this.http.request<Order | { order: Order }>({
       method: "POST",
       path: "/equity/orders/market",
@@ -99,7 +74,7 @@ class OpenOrderResource {
     return unwrapOrder(response);
   }
 
-  async createLimit(request: LimitOrderRequest): Promise<Order> {
+  async createLimitOrder(request: LimitOrderRequest): Promise<Order> {
     const response = await this.http.request<Order | { order: Order }>({
       method: "POST",
       path: "/equity/orders/limit",
@@ -112,7 +87,21 @@ class OpenOrderResource {
     return unwrapOrder(response);
   }
 
-  async createStop(request: StopOrderRequest): Promise<Order> {
+  async createSellLimitOrder(request: LimitOrderRequest): Promise<Order> {
+    return this.createLimitOrder({
+      ...request,
+      quantity: -Math.abs(request.quantity),
+    });
+  }
+
+  async createBuyLimitOrder(request: LimitOrderRequest): Promise<Order> {
+    return this.createLimitOrder({
+      ...request,
+      quantity: Math.abs(request.quantity),
+    });
+  }
+
+  async createStopOrder(request: StopOrderRequest): Promise<Order> {
     const response = await this.http.request<Order | { order: Order }>({
       method: "POST",
       path: "/equity/orders/stop",
@@ -125,7 +114,7 @@ class OpenOrderResource {
     return unwrapOrder(response);
   }
 
-  async createStopLimit(request: StopLimitOrderRequest): Promise<Order> {
+  async createStopLimitOrder(request: StopLimitOrderRequest): Promise<Order> {
     const response = await this.http.request<Order | { order: Order }>({
       method: "POST",
       path: "/equity/orders/stop_limit",
@@ -138,7 +127,7 @@ class OpenOrderResource {
     return unwrapOrder(response);
   }
 
-  async cancel(id: number): Promise<Order> {
+  async cancelOpenOrder(id: number): Promise<Order> {
     const response = await this.http.request<Order | { order: Order }>({
       method: "DELETE",
       path: `/equity/orders/${id}`,
@@ -147,44 +136,59 @@ class OpenOrderResource {
     return unwrapOrder(response);
   }
 
-  async cancelMany({ ids }: { ids: number[] }): Promise<Order[]> {
-    return Promise.all(ids.map((id) => this.cancel(id)));
+  async cancelOpenOrders({ ids }: { ids: number[] }): Promise<Order[]> {
+    return Promise.all(ids.map((id) => this.cancelOpenOrder(id)));
   }
-}
 
-class ClosedOrderResource {
-  constructor(private readonly http: HttpClient) {}
-
-  getMany(query?: Pick<PaginationQuery, "ticker">): Promise<HistoricalOrder[]> {
+  getClosedOrders(query?: {
+    ticker?: Ticker;
+    side?: OrderSide;
+    timeframe?: "TODAY";
+  }): Promise<HistoricalOrder[]> {
+    const { timeframe, side, ...paginationQuery } = query ?? {};
     return fetchAllPages<HistoricalOrder>(
       this.http,
       "/equity/history/orders",
-      query,
+      paginationQuery,
+      {
+        ...(side
+          ? {
+              includeWhen: (historicalOrder) =>
+                historicalOrder.order.side === side,
+            }
+          : {}),
+        ...(timeframe === "TODAY"
+          ? {
+              stopWhen: (historicalOrder) =>
+                !isHistoricalOrderFromToday(historicalOrder),
+            }
+          : {}),
+      },
     );
   }
-}
 
-class InstrumentResource {
-  constructor(
-    private readonly http: HttpClient,
-    private readonly exchangeResource: ExchangeResource,
-  ) {}
-
-  async getMany(options?: {
+  async getInstruments(options?: {
     isExchangeOpen?: boolean;
     exchangeId?: number;
+    type?: TradableInstrument["type"];
   }): Promise<TradableInstrument[]> {
     const instruments = await this.http.request<TradableInstrument[]>({
       path: "/equity/metadata/instruments",
     });
 
     let filteredInstruments = instruments;
-    const needsExchanges = options?.exchangeId || options?.isExchangeOpen;
-    const exchanges = needsExchanges
-      ? await this.exchangeResource.getMany()
-      : undefined;
+    if (options?.type !== undefined) {
+      filteredInstruments = filteredInstruments.filter(
+        (instrument) => instrument.type === options.type,
+      );
+    }
 
-    if (options?.exchangeId) {
+    const needsExchanges =
+      options?.exchangeId !== undefined ||
+      options?.isExchangeOpen !== undefined;
+    const exchanges = needsExchanges ? await this.getExchanges() : undefined;
+
+    if (options?.exchangeId !== undefined) {
       const exchange = exchanges?.find(
         (item) => item.id === options.exchangeId,
       );
@@ -197,7 +201,7 @@ class InstrumentResource {
       );
     }
 
-    if (options?.isExchangeOpen) {
+    if (options?.isExchangeOpen !== undefined) {
       const scheduleById = new Map(
         exchanges!
           .flatMap((exchange) => exchange.workingSchedules)
@@ -216,10 +220,10 @@ class InstrumentResource {
     return filteredInstruments;
   }
 
-  async getOne(
+  async getInstrument(
     query: { ticker: Ticker } | { name: string } | { id: string },
   ): Promise<TradableInstrument | undefined> {
-    const instruments = await this.getMany();
+    const instruments = await this.getInstruments();
     return instruments.find((instrument) =>
       "ticker" in query
         ? instrument.ticker === query.ticker
@@ -228,13 +232,9 @@ class InstrumentResource {
           : instrument.id === query.id,
     );
   }
-}
-
-class ExchangeResource {
-  constructor(private readonly http: HttpClient) {}
 
   /** GET /equity/metadata/exchanges */
-  async getMany(options?: { isOpen?: boolean }): Promise<Exchange[]> {
+  async getExchanges(options?: { isOpen?: boolean }): Promise<Exchange[]> {
     const exchanges = await this.http.request<Exchange[]>({
       path: "/equity/metadata/exchanges",
     });
@@ -245,71 +245,64 @@ class ExchangeResource {
     );
   }
 
-  async getOne(
+  async getExchange(
     query: { id: number } | { name: string },
   ): Promise<Exchange | undefined> {
-    const exchanges = await this.getMany();
+    const exchanges = await this.getExchanges();
     return exchanges.find((exchange) =>
       "id" in query ? exchange.id === query.id : exchange.name === query.name,
     );
   }
-}
-
-class PositionResource {
-  constructor(private readonly http: HttpClient) {}
 
   /** GET /equity/positions */
-  getMany(query?: PositionsQuery): Promise<Position[]> {
+  getPositions(query?: PositionsQuery): Promise<Position[]> {
     return this.http.request<Position[]>({
       path: "/equity/positions",
       ...(query ? { query } : {}),
     });
   }
 
-  async getOne(query: { ticker: Ticker }): Promise<Position | undefined> {
-    const positions = await this.getMany(query);
+  async getPosition(query: { ticker: Ticker }): Promise<Position | undefined> {
+    const positions = await this.getPositions(query);
     return positions.find((p) => p.instrument.ticker === query.ticker);
   }
-}
 
-class DividendResource {
-  constructor(private readonly http: HttpClient) {}
-
-  getMany(query?: PaginationQuery): Promise<HistoryDividendItem[]> {
+  getDividends(query?: PaginationQuery): Promise<HistoryDividendItem[]> {
     return fetchAllPages<HistoryDividendItem>(
       this.http,
       "/equity/history/dividends",
       query,
     );
   }
-}
 
-class TransactionResource {
-  constructor(private readonly http: HttpClient) {}
-
-  getMany(query?: PaginationQuery): Promise<HistoryTransactionItem[]> {
+  getTransactions(query?: PaginationQuery): Promise<HistoryTransactionItem[]> {
     return fetchAllPages<HistoryTransactionItem>(
       this.http,
       "/equity/history/transactions",
       query,
     );
   }
-}
 
-class ExportResource {
-  constructor(private readonly http: HttpClient) {}
-
-  getReports(): Promise<Report[]> {
+  getExportReports(): Promise<Report[]> {
     return this.http.request<Report[]>({
       path: "/equity/history/exports",
     });
   }
 
-  enqueueReport(params: RequestReportParams): Promise<EnqueuedReport> {
+  enqueueExportReport(params: RequestReportParams): Promise<EnqueuedReport> {
     return this.http.request<EnqueuedReport>({
       method: "POST",
       path: "/equity/history/exports",
       body: params,
     });
   }
+}
+
+function isHistoricalOrderFromToday(order: HistoricalOrder): boolean {
+  const timestamp = getHistoricalOrderTimestamp(order);
+  if (!timestamp) {
+    return false;
+  }
+
+  return isSameDay(new Date(timestamp), new Date());
 }

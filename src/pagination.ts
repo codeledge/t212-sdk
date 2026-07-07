@@ -1,6 +1,18 @@
 import type { HttpClient } from "./http";
 import type { PaginatedResponse, PaginationQuery } from "./types";
 
+export interface PaginationIteratorOptions<T> {
+  /**
+   * Stop iteration when this returns true for an item.
+   * The matching item is not yielded/returned.
+   */
+  stopWhen?: (item: T) => boolean;
+  /** Yield only items that match this predicate. */
+  includeWhen?: (item: T) => boolean;
+  /** Maximum number of pages to read. */
+  maxPages?: number;
+}
+
 async function fetchPage<T>(
   http: HttpClient,
   initialPath: string,
@@ -29,10 +41,16 @@ export async function fetchAllPages<T>(
   http: HttpClient,
   initialPath: string,
   query?: PaginationQuery,
+  options?: PaginationIteratorOptions<T>,
 ): Promise<T[]> {
   const items: T[] = [];
-  for await (const page of iteratePages<T>(http, initialPath, query)) {
-    items.push(...page.items);
+  for await (const item of iterateAllItems<T>(
+    http,
+    initialPath,
+    query,
+    options,
+  )) {
+    items.push(item);
   }
   return items;
 }
@@ -64,9 +82,21 @@ export async function* iterateAllItems<T>(
   http: HttpClient,
   initialPath: string,
   query?: PaginationQuery,
+  options?: PaginationIteratorOptions<T>,
 ): AsyncGenerator<T, void, undefined> {
+  let pageIndex = 0;
   for await (const page of iteratePages<T>(http, initialPath, query)) {
+    pageIndex += 1;
+    if (options?.maxPages !== undefined && pageIndex > options.maxPages) {
+      return;
+    }
     for (const item of page.items) {
+      if (options?.stopWhen?.(item)) {
+        return;
+      }
+      if (options?.includeWhen && !options.includeWhen(item)) {
+        continue;
+      }
       yield item;
     }
   }

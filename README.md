@@ -74,11 +74,11 @@ const client = new T212({
 });
 
 // Account snapshot
-const summary = await client.account.getSummary();
+const summary = await client.getAccountSummary();
 console.log(`Portfolio value: ${summary.totalValue} ${summary.currency}`);
 
 // Place a fractional market order
-const order = await client.openOrder.createMarket({
+const order = await client.createMarketOrder({
   ticker: "AAPL_US_EQ",
   quantity: 0.1,
 });
@@ -94,15 +94,15 @@ console.log(`Order ${order.id} · ${order.status}`);
 
 | | |
 |---|---|
-| **account** | `getSummary` |
-| **openOrder** | `getMany` · `getOne` · `createMarket` · `createLimit` · `createStop` · `createStopLimit` · `cancel` · `cancelMany` |
-| **closedOrder** | `getMany` |
-| **instrument** | `getMany` · `getOne` |
-| **exchange** | `getMany` · `getOne` |
-| **position** | `getMany` · `getOne` |
-| **dividend** | `getMany` |
-| **transaction** | `getMany` |
-| **export** | `getReports` · `enqueueReport` |
+| **account** | `getAccountSummary` |
+| **open orders** | `getOpenOrders` · `getOpenOrder` · `createMarketOrder` · `createLimitOrder` · `createSellLimitOrder` · `createBuyLimitOrder` · `createStopOrder` · `createStopLimitOrder` · `cancelOpenOrder` · `cancelOpenOrders` |
+| **closed orders** | `getClosedOrders` |
+| **instruments** | `getInstruments` · `getInstrument` |
+| **exchanges** | `getExchanges` · `getExchange` |
+| **positions** | `getPositions` · `getPosition` |
+| **dividends** | `getDividends` |
+| **transactions** | `getTransactions` |
+| **exports** | `getExportReports` · `enqueueExportReport` |
 
 ---
 
@@ -126,7 +126,7 @@ Positive `quantity` = **buy**. Negative = **sell**. Fractional shares supported.
 
 ```typescript
 // Limit buy — expires end of day
-await client.openOrder.createLimit({
+await client.createLimitOrder({
   ticker: "AAPL_US_EQ",
   quantity: 1,
   limitPrice: 150,
@@ -134,7 +134,7 @@ await client.openOrder.createLimit({
 });
 
 // Stop-loss sell
-await client.openOrder.createStop({
+await client.createStopOrder({
   ticker: "AAPL_US_EQ",
   quantity: -1,
   stopPrice: 140,
@@ -142,21 +142,21 @@ await client.openOrder.createStop({
 });
 
 // Cancel
-await client.openOrder.cancel(orderId);
+await client.cancelOpenOrder(orderId);
 ```
 
 ---
 
 ## Pagination
 
-Historical data (`closedOrder`, `dividend`, `transaction`) is cursor-paginated
-under the hood — `getMany()` walks every page for you and returns the full
-array:
+Historical data (`closedOrders`, `dividends`, `transactions`) is cursor-paginated
+under the hood — `getClosedOrders`, `getDividends`, and `getTransactions` walk
+every page for you and return the full array:
 
 ```typescript
-const orders = await client.closedOrder.getMany({ ticker: "AAPL_US_EQ" });
-const dividends = await client.dividend.getMany();
-const transactions = await client.transaction.getMany();
+const orders = await client.getClosedOrders({ ticker: "AAPL_US_EQ" });
+const dividends = await client.getDividends();
+const transactions = await client.getTransactions();
 ```
 
 ---
@@ -175,7 +175,7 @@ You write business logic. The SDK stays out of the way.
 import { T212Error } from "t212-sdk";
 
 try {
-  await client.openOrder.getOne(123);
+  await client.getOpenOrder(123);
 } catch (error) {
   if (error instanceof T212Error && error.isRateLimited) {
     // Rare — SDK retries automatically; this is the escape hatch
@@ -187,33 +187,33 @@ try {
 
 ## API coverage
 
-| Resource | Methods |
+| Scope | Methods |
 | --- | --- |
-| `account` | `getSummary` |
-| `openOrder` | `getMany` (filter by ticker/type/side/status/strategy), `getOne`, `createMarket`, `createLimit`, `createStop`, `createStopLimit`, `cancel`, `cancelMany` |
-| `closedOrder` | `getMany` |
-| `instrument` | `getMany`, `getOne` |
-| `exchange` | `getMany` (supports `isOpen` filter), `getOne` |
-| `position` | `getMany`, `getOne` |
-| `dividend` | `getMany` |
-| `transaction` | `getMany` |
-| `export` | `getReports`, `enqueueReport` |
+| account | `getAccountSummary` |
+| open orders | `getOpenOrders` (filter by ticker/type/side/status/strategy), `getOpenOrder`, `createMarketOrder`, `createLimitOrder`, `createSellLimitOrder`, `createBuyLimitOrder`, `createStopOrder`, `createStopLimitOrder`, `cancelOpenOrder`, `cancelOpenOrders` |
+| closed orders | `getClosedOrders` |
+| instruments | `getInstruments` (supports `type`/`exchangeId`/`isExchangeOpen` filters), `getInstrument` |
+| exchanges | `getExchanges` (supports `isOpen` filter), `getExchange` |
+| positions | `getPositions`, `getPosition` |
+| dividends | `getDividends` |
+| transactions | `getTransactions` |
+| exports | `getExportReports`, `enqueueExportReport` |
 
-### openOrder.getMany
+### getOpenOrders
 
 Fetches currently open/pending orders, optionally filtered by ticker/type/side/status/strategy.
 
 ```ts
-const orders = await client.openOrder.getMany({ ticker: "AAPL_US_EQ" });
+const orders = await client.getOpenOrders({ ticker: "AAPL_US_EQ" });
 // e.g. [{ id: 1, ticker: "AAPL_US_EQ", side: "SELL", limitPrice: 296.49, ... }]
 ```
 
-### position.getOne
+### getPosition
 
 Fetches all open positions and returns the one matching the given ticker, or `undefined` if not held.
 
 ```ts
-const position = await client.position.getOne({ ticker: "AAPL_US_EQ" });
+const position = await client.getPosition({ ticker: "AAPL_US_EQ" });
 
 if (!position) {
   console.log("No open position");

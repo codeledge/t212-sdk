@@ -4,7 +4,7 @@ import { getAddedCosts } from "./getAddedCosts";
 import type { AddedCostsRequest, AddedCostsResponse } from "./getAddedCosts";
 import { getKeyStats } from "./getKeyStats";
 import type { KeyStats } from "./getKeyStats";
-import { getLastCandle } from "./getLastCandle";
+import { getLastCandle, type GetLastCandleOptions } from "./getLastCandle";
 import { getLastTradePrices } from "./getLastTradePrices";
 import type { LastTradePricesResponse } from "./getLastTradePrices";
 import { getOhlc } from "./getOhlc";
@@ -17,7 +17,7 @@ import type {
 import { getSellAddedCosts } from "./getSellAddedCosts";
 import { getTopMovers } from "./getTopMovers";
 import type { TopMover } from "./getTopMovers";
-import type { CandleInterval, T212Environment } from "../types";
+import type { Candle, CandleInterval, T212Environment } from "../types";
 
 export interface BrowserClientOptions {
   environment: T212Environment;
@@ -90,8 +90,9 @@ export class BrowserClient {
   getLastCandle(
     ticker: string,
     interval: CandleInterval = "ONE_MINUTE",
-  ): Promise<OhlcCandle | undefined> {
-    return getLastCandle(ticker, interval, this.environment);
+    options: GetLastCandleOptions = {},
+  ): Promise<Candle | undefined> {
+    return getLastCandle(ticker, interval, this.environment, options);
   }
 
   /** Order instrument settings (max buy/sell quantities, suspension, etc). */
