@@ -1,6 +1,17 @@
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import {
+  chromium,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from "playwright";
 import { homedir } from "os";
 import { resolve } from "path";
+import {
+  isTrustedTrading212Url,
+  resolveLoopbackCdpUrl,
+  resolveTrading212Origin,
+  resolveTrading212RequestUrl,
+} from "./urlGuards";
 
 /**
  * Robust access to Trading 212's Cloudflare-protected internal endpoints.
@@ -35,9 +46,6 @@ import { resolve } from "path";
  *   T212_APP_ORIGIN             app origin to anchor requests (default app.trading212.com)
  */
 
-const APP_ORIGIN = process.env.T212_APP_ORIGIN ?? "https://app.trading212.com";
-const CDP_URL = process.env.T212_CDP_URL ?? "http://localhost:9222";
-
 const CHROME_ARGS = [
   "--password-store=basic",
   "--use-mock-keychain",
@@ -54,6 +62,20 @@ function userDataDir(): string {
   return (
     process.env.T212_CHROME_USER_DATA_DIR ??
     resolve(homedir(), ".t212-sdk", "chrome")
+  );
+}
+
+function getAppOrigin(): string {
+  return resolveTrading212Origin(
+    process.env.T212_APP_ORIGIN ?? "https://app.trading212.com",
+    "T212_APP_ORIGIN",
+  );
+}
+
+function getCdpUrl(): string {
+  return resolveLoopbackCdpUrl(
+    process.env.T212_CDP_URL ?? "http://localhost:9222",
+    "T212_CDP_URL",
   );
 }
 
@@ -82,7 +104,10 @@ function parseCookieHeader(
 }
 
 /** Minimize the browser window (best-effort) so it isn't in the way. */
-async function minimizeWindow(context: BrowserContext, page: Page): Promise<void> {
+async function minimizeWindow(
+  context: BrowserContext,
+  page: Page,
+): Promise<void> {
   try {
     const cdp = await context.newCDPSession(page);
     const { windowId } = await cdp.send("Browser.getWindowForTarget");
@@ -101,8 +126,11 @@ async function minimizeWindow(context: BrowserContext, page: Page): Promise<void
  * Cloudflare, and the injected `cf_clearance`/session cookies authenticate —
  * no interactive login, no CDP, no persistent profile.
  */
-async function launchWithCookies(cookieHeader: string): Promise<BrowserContext> {
+async function launchWithCookies(
+  cookieHeader: string,
+): Promise<BrowserContext> {
   const showWindow = process.env.T212_SHOW_WINDOW === "1";
+  const appOrigin = getAppOrigin();
   const browser = await chromium.launch({
     channel: "chrome",
     headless: false,
@@ -115,13 +143,13 @@ async function launchWithCookies(cookieHeader: string): Promise<BrowserContext> 
   await context.addCookies(parseCookieHeader(cookieHeader));
   const page = await context.newPage();
   if (!showWindow) await minimizeWindow(context, page);
-  await page.goto(APP_ORIGIN, { waitUntil: "domcontentloaded" });
+  await page.goto(appOrigin, { waitUntil: "domcontentloaded" });
   return context;
 }
 
 async function connectToRunningChrome(): Promise<BrowserContext | null> {
   try {
-    const browser = await chromium.connectOverCDP(CDP_URL);
+    const browser = await chromium.connectOverCDP(getCdpUrl());
     browserPromise = Promise.resolve(browser);
     usingCdp = true;
     return browser.contexts()[0] ?? (await browser.newContext());
@@ -152,7 +180,8 @@ async function getContext(): Promise<BrowserContext> {
 
       if (!showWindow) {
         const page =
-          context.pages().find((p) => !p.isClosed()) ?? (await context.newPage());
+          context.pages().find((p) => !p.isClosed()) ??
+          (await context.newPage());
         await minimizeWindow(context, page);
       }
       return context;
@@ -164,18 +193,19 @@ async function getContext(): Promise<BrowserContext> {
 export async function getPage(): Promise<Page> {
   if (!pagePromise) {
     pagePromise = (async () => {
+      const appOrigin = getAppOrigin();
       const context = await getContext();
       const existing = context
         .pages()
-        .find((p) => !p.isClosed() && p.url().includes("trading212.com"));
+        .find((p) => !p.isClosed() && isTrustedTrading212Url(p.url()));
       const page = existing ?? (await context.newPage());
       // Anchor on the app origin once. The charting endpoints live on
       // *.services.trading212.com; T212's CORS lets the app origin call them
       // cross-origin with credentials, so we never navigate again after this.
       // Skip re-navigating a page already on trading212.com (likely your own
       // logged-in tab when attached over CDP) to avoid disrupting it.
-      if (!page.url().includes("trading212.com")) {
-        await page.goto(APP_ORIGIN, { waitUntil: "domcontentloaded" });
+      if (!isTrustedTrading212Url(page.url())) {
+        await page.goto(appOrigin, { waitUntil: "domcontentloaded" });
       }
       return page;
     })();
@@ -234,6 +264,7 @@ export async function browserRequest<T>(
   options: BrowserRequestOptions = {},
 ): Promise<T> {
   const page = await getPage();
+  const target = resolveTrading212RequestUrl(url);
 
   const result = await page.evaluate(
     async ({ target, method, body }) => {
@@ -247,7 +278,7 @@ export async function browserRequest<T>(
       const text = await res.text();
       return { ok: res.ok, status: res.status, text };
     },
-    { target: url, method: options.method ?? "GET", body: options.body },
+    { target, method: options.method ?? "GET", body: options.body },
   );
 
   const body = parseBody(result.text);

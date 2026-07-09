@@ -1,4 +1,5 @@
 import type { T212Environment } from "../types";
+import { resolveTrading212Origin } from "./urlGuards";
 
 const SERVICES_BASE_URL: Record<T212Environment, string> = {
   DEMO: "https://demo.services.trading212.com",
@@ -12,5 +13,10 @@ const SERVICES_BASE_URL: Record<T212Environment, string> = {
  * configured environment.
  */
 export function getServicesBaseUrl(environment: T212Environment): string {
-  return process.env.T212_SERVICES_BASE_URL ?? SERVICES_BASE_URL[environment];
+  const override = process.env.T212_SERVICES_BASE_URL;
+  if (!override) {
+    return SERVICES_BASE_URL[environment];
+  }
+
+  return resolveTrading212Origin(override, "T212_SERVICES_BASE_URL");
 }
