@@ -74,6 +74,20 @@ export class T212 {
     return unwrapOrder(response);
   }
 
+  async createSellMarketOrder(request: MarketOrderRequest): Promise<Order> {
+    return this.createMarketOrder({
+      ...request,
+      quantity: -Math.abs(request.quantity),
+    });
+  }
+
+  async createBuyMarketOrder(request: MarketOrderRequest): Promise<Order> {
+    return this.createMarketOrder({
+      ...request,
+      quantity: Math.abs(request.quantity),
+    });
+  }
+
   async createLimitOrder(request: LimitOrderRequest): Promise<Order> {
     const response = await this.http.request<Order | { order: Order }>({
       method: "POST",
@@ -136,7 +150,14 @@ export class T212 {
     return unwrapOrder(response);
   }
 
-  async cancelOpenOrders({ ids }: { ids: number[] }): Promise<Order[]> {
+  async cancelOpenOrders(
+    options?: { ids: number[] } | OrdersFilter,
+  ): Promise<Order[]> {
+    const ids =
+      options && "ids" in options
+        ? options.ids
+        : (await this.getOpenOrders(options)).map((order) => order.id);
+
     return Promise.all(ids.map((id) => this.cancelOpenOrder(id)));
   }
 
@@ -265,6 +286,19 @@ export class T212 {
   async getPosition(query: { ticker: Ticker }): Promise<Position | undefined> {
     const positions = await this.getPositions(query);
     return positions.find((p) => p.instrument.ticker === query.ticker);
+  }
+
+  async closePosition(query: { ticker: Ticker }): Promise<void> {
+    const position = await this.getPosition(query);
+    if (!position) return undefined;
+    await this.cancelOpenOrders({
+      ticker: query.ticker,
+      side: "SELL",
+    });
+    await this.createSellMarketOrder({
+      ticker: query.ticker,
+      quantity: position.quantity,
+    });
   }
 
   getDividends(query?: PaginationQuery): Promise<HistoryDividendItem[]> {

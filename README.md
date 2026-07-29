@@ -95,7 +95,7 @@ console.log(`Order ${order.id} · ${order.status}`);
 | | |
 |---|---|
 | **account** | `getAccountSummary` |
-| **open orders** | `getOpenOrders` · `getOpenOrder` · `createMarketOrder` · `createLimitOrder` · `createSellLimitOrder` · `createBuyLimitOrder` · `createStopOrder` · `createStopLimitOrder` · `cancelOpenOrder` · `cancelOpenOrders` |
+| **open orders** | `getOpenOrders` · `getOpenOrder` · `createMarketOrder` · `createBuyMarketOrder` · `createSellMarketOrder` · `createLimitOrder` · `createSellLimitOrder` · `createBuyLimitOrder` · `createStopOrder` · `createStopLimitOrder` · `cancelOpenOrder` · `cancelOpenOrders` |
 | **closed orders** | `getClosedOrders` |
 | **instruments** | `getInstruments` · `getInstrument` |
 | **exchanges** | `getExchanges` · `getExchange` |
@@ -143,6 +143,8 @@ await client.createStopOrder({
 
 // Cancel
 await client.cancelOpenOrder(orderId);
+await client.cancelOpenOrders({ ticker: "AAPL_US_EQ" });
+await client.cancelOpenOrders({ ids: [orderId] });
 ```
 
 ---
@@ -190,7 +192,7 @@ try {
 | Scope | Methods |
 | --- | --- |
 | account | `getAccountSummary` |
-| open orders | `getOpenOrders` (filter by ticker/type/side/status/strategy), `getOpenOrder`, `createMarketOrder`, `createLimitOrder`, `createSellLimitOrder`, `createBuyLimitOrder`, `createStopOrder`, `createStopLimitOrder`, `cancelOpenOrder`, `cancelOpenOrders` |
+| open orders | `getOpenOrders` (filter by ticker/type/side/status/strategy), `getOpenOrder`, `createMarketOrder`, `createBuyMarketOrder`, `createSellMarketOrder`, `createLimitOrder`, `createSellLimitOrder`, `createBuyLimitOrder`, `createStopOrder`, `createStopLimitOrder`, `cancelOpenOrder`, `cancelOpenOrders` (by `ids` or same filters as `getOpenOrders`) |
 | closed orders | `getClosedOrders` |
 | instruments | `getInstruments` (supports `type`/`exchangeId`/`isExchangeOpen` filters), `getInstrument` |
 | exchanges | `getExchanges` (supports `isOpen` filter), `getExchange` |

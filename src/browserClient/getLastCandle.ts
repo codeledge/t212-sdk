@@ -3,6 +3,7 @@ import type { OhlcCandle, OhlcOptions } from "./getOhlc";
 import type { Candle, CandleInterval, T212Environment } from "../types";
 import { differenceInSeconds, fromUnixTime } from "date-fns";
 import { parseCandle } from "../parsers/parseCandle";
+import { last } from "deverything";
 
 const INTERVAL_SECONDS: Record<CandleInterval, number> = {
   ONE_MINUTE: 60,
@@ -26,7 +27,7 @@ export async function getLastCandle(
   ticker: string,
   interval: CandleInterval,
   environment: T212Environment,
-  { extHours = true, ensureLastInterval = true }: GetLastCandleOptions = {},
+  { extHours = true, ensureLastInterval = false }: GetLastCandleOptions = {},
 ): Promise<Candle | undefined> {
   const response = await getOhlc(
     ticker,
@@ -34,7 +35,8 @@ export async function getLastCandle(
     { size: 1, extHours },
     environment,
   );
-  const ohlc = response?.candles?.[0];
+
+  const ohlc = last(response?.candles);
   if (!ohlc) return undefined;
   const candle = parseCandle(ohlc);
   if (!ensureLastInterval) return candle;

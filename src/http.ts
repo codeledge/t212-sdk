@@ -230,7 +230,12 @@ function endpointMinIntervalMs(path: string, method: HttpMethod): number {
     return 1_000;
   }
 
-  if (path === "/equity/orders" || /\/equity\/orders\/\d+$/.test(path)) {
+  // Docs: GET /equity/orders = 1 req / 5s; GET /equity/orders/{id} = 1 req / 1s
+  if (path === "/equity/orders") {
+    return 5_000;
+  }
+
+  if (/\/equity\/orders\/\d+$/.test(path)) {
     return 1_000;
   }
 

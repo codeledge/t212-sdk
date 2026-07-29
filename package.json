@@ -65,18 +65,17 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/minimist": "^1.2.5",
+    "dotenv": "^17.4.2",
     "playwright": "^1.61.1",
     "prettier": "^3.8.4",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@prisma/client": "^7.8.0",
     "bignumber.js": "^11.1.4",
     "date-fns": "^4.4.0",
     "deverything": "^5.5.2",
     "minimist": "^1.2.8",
-    "prisma": "^7.8.0",
     "zod": "^4.4.3"
   }
 }
