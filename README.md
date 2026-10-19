@@ -95,11 +95,11 @@ console.log(`Order ${order.id} · ${order.status}`);
 | | |
 |---|---|
 | **account** | `getAccountSummary` |
-| **open orders** | `getOpenOrders` · `getOpenOrder` · `createMarketOrder` · `createBuyMarketOrder` · `createSellMarketOrder` · `createLimitOrder` · `createSellLimitOrder` · `createBuyLimitOrder` · `createStopOrder` · `createStopLimitOrder` · `cancelOpenOrder` · `cancelOpenOrders` |
+| **open orders** | `getOpenOrders` · `getOpenOrder` · `createMarketOrder` · `createBuyMarketOrder` · `createSellMarketOrder` · `createLimitOrder` · `createSellLimitOrder` · `createBuyLimitOrder` · `createStopOrder` · `createStopLimitOrder` · `editOrder` · `cancelOpenOrder` · `cancelOpenOrders` |
 | **closed orders** | `getClosedOrders` |
 | **instruments** | `getInstruments` · `getInstrument` |
 | **exchanges** | `getExchanges` · `getExchange` |
-| **positions** | `getPositions` · `getPosition` |
+| **positions** | `getPositions` · `getPosition` · `closePosition` · `closeAll` |
 | **dividends** | `getDividends` |
 | **transactions** | `getTransactions` |
 | **exports** | `getExportReports` · `enqueueExportReport` |
@@ -140,6 +140,9 @@ await client.createStopOrder({
   stopPrice: 140,
   timeValidity: "GTC",
 });
+
+// Edit (cancel + recreate — T212 has no native amend)
+await client.editOrder(orderId, { limitPrice: 151 });
 
 // Cancel
 await client.cancelOpenOrder(orderId);
@@ -182,6 +185,7 @@ try {
   if (error instanceof T212Error && error.isRateLimited) {
     // Rare — SDK retries automatically; this is the escape hatch
   }
+  // 400s (e.g. quantity too low / precision) expose API `detail`/`title` in error.message
 }
 ```
 
@@ -192,11 +196,11 @@ try {
 | Scope | Methods |
 | --- | --- |
 | account | `getAccountSummary` |
-| open orders | `getOpenOrders` (filter by ticker/type/side/status/strategy), `getOpenOrder`, `createMarketOrder`, `createBuyMarketOrder`, `createSellMarketOrder`, `createLimitOrder`, `createSellLimitOrder`, `createBuyLimitOrder`, `createStopOrder`, `createStopLimitOrder`, `cancelOpenOrder`, `cancelOpenOrders` (by `ids` or same filters as `getOpenOrders`) |
+| open orders | `getOpenOrders` (filter by ticker/type/side/status/strategy), `getOpenOrder`, `createMarketOrder`, `createBuyMarketOrder`, `createSellMarketOrder`, `createLimitOrder`, `createSellLimitOrder`, `createBuyLimitOrder`, `createStopOrder`, `createStopLimitOrder`, `editOrder` (cancel + recreate), `cancelOpenOrder`, `cancelOpenOrders` (by `ids` or same filters as `getOpenOrders`) |
 | closed orders | `getClosedOrders` |
 | instruments | `getInstruments` (supports `type`/`exchangeId`/`isExchangeOpen` filters), `getInstrument` |
 | exchanges | `getExchanges` (supports `isOpen` filter), `getExchange` |
-| positions | `getPositions`, `getPosition` |
+| positions | `getPositions`, `getPosition`, `closePosition`, `closeAll` |
 | dividends | `getDividends` |
 | transactions | `getTransactions` |
 | exports | `getExportReports`, `enqueueExportReport` |

@@ -227,6 +227,11 @@ export class BrowserRequestError extends Error {
     super(message);
     this.name = "BrowserRequestError";
   }
+
+  /** Keep console/logs from dumping Cloudflare HTML challenge pages. */
+  [Symbol.for("nodejs.util.inspect.custom")](): string {
+    return `${this.name}: ${this.message}\n  status: ${this.status},\n  body: ${inspectBody(this.body)}`;
+  }
 }
 
 export interface BrowserRequestOptions {
@@ -244,6 +249,25 @@ function parseBody(text: string): unknown {
   }
 }
 
+/** Collapse HTML / huge string bodies so they never get logged in full. */
+function summarizeBody(body: unknown): unknown {
+  if (typeof body !== "string") return body;
+  const trimmed = body.trimStart();
+  if (trimmed.startsWith("<!") || trimmed.startsWith("<html") || body.length > 400) {
+    return `[non-JSON body, ${body.length} chars]`;
+  }
+  return body;
+}
+
+function inspectBody(body: unknown): string {
+  if (typeof body === "string") return body;
+  try {
+    return JSON.stringify(body);
+  } catch {
+    return String(body);
+  }
+}
+
 function throwForStatus(status: number, body: unknown): never {
   const message =
     typeof body === "object" &&
@@ -252,7 +276,7 @@ function throwForStatus(status: number, body: unknown): never {
     typeof (body as { message: unknown }).message === "string"
       ? (body as { message: string }).message
       : `Request failed: ${status}`;
-  throw new BrowserRequestError(message, status, body);
+  throw new BrowserRequestError(message, status, summarizeBody(body));
 }
 
 /**
