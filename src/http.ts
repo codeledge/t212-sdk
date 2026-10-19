@@ -187,15 +187,40 @@ function getErrorMessage(
   }
 
   if (body && typeof body === "object") {
-    if (typeof body.message === "string") {
+    if (typeof body.message === "string" && body.message.length > 0) {
       return body.message;
     }
-    if (typeof body.error === "string") {
+    if (typeof body.clarification === "string" && body.clarification.length > 0) {
+      return body.clarification;
+    }
+    if (typeof body.detail === "string" && body.detail.length > 0) {
+      return body.detail;
+    }
+    if (typeof body.title === "string" && body.title.length > 0) {
+      return body.title;
+    }
+    if (typeof body.error === "string" && body.error.length > 0) {
       return body.error;
+    }
+    if (body.error && typeof body.error === "object") {
+      const nested = body.error;
+      const detail =
+        typeof nested.detail === "string" ? nested.detail : null;
+      const title = typeof nested.title === "string" ? nested.title : null;
+      const type = typeof nested.type === "string" ? nested.type : null;
+      if (detail && title) return `${title}: ${detail}`;
+      if (detail) return detail;
+      if (title) return title;
+      if (type) {
+        const slug = type.split("/").pop();
+        if (slug) return slug.replace(/-/g, " ");
+      }
     }
   }
 
   switch (status) {
+    case 400:
+      return "Bad request — check quantity, price, and instrument limits";
     case 401:
       return "Unauthorized — check your API key and secret";
     case 403:

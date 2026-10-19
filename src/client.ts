@@ -150,6 +150,82 @@ export class T212 {
     return unwrapOrder(response);
   }
 
+  /**
+   * Edit an open order by cancelling it and placing a replacement.
+   * T212 has no native amend endpoint — this is cancel + recreate.
+   */
+  async editOrder(
+    id: number,
+    changes: {
+      limitPrice?: number;
+      stopPrice?: number;
+      quantity?: number;
+    },
+  ): Promise<Order> {
+    const order = await this.getOpenOrder(id);
+    const absQty = Math.abs(
+      changes.quantity ?? order.quantity ?? order.orderedQuantity ?? 0,
+    );
+    if (!Number.isFinite(absQty) || absQty <= 0) {
+      throw new Error(`Order ${id} has no quantity to recreate`);
+    }
+
+    const side =
+      order.side ??
+      ((order.quantity ?? order.orderedQuantity ?? 0) < 0 ? "SELL" : "BUY");
+    const quantity = side === "SELL" ? -absQty : absQty;
+    const timeValidity =
+      order.timeInForce === "GOOD_TILL_CANCEL" ? "GOOD_TILL_CANCEL" : "DAY";
+
+    await this.cancelOpenOrder(id);
+
+    if (order.type === "LIMIT") {
+      const limitPrice = changes.limitPrice ?? order.limitPrice;
+      if (limitPrice == null || !Number.isFinite(limitPrice) || limitPrice <= 0) {
+        throw new Error(`Order ${id} is missing a limit price`);
+      }
+      return this.createLimitOrder({
+        ticker: order.ticker,
+        quantity,
+        limitPrice,
+        timeValidity,
+      });
+    }
+
+    if (order.type === "STOP") {
+      const stopPrice = changes.stopPrice ?? order.stopPrice;
+      if (stopPrice == null || !Number.isFinite(stopPrice) || stopPrice <= 0) {
+        throw new Error(`Order ${id} is missing a stop price`);
+      }
+      return this.createStopOrder({
+        ticker: order.ticker,
+        quantity,
+        stopPrice,
+        timeValidity,
+      });
+    }
+
+    if (order.type === "STOP_LIMIT") {
+      const limitPrice = changes.limitPrice ?? order.limitPrice;
+      const stopPrice = changes.stopPrice ?? order.stopPrice;
+      if (limitPrice == null || !Number.isFinite(limitPrice) || limitPrice <= 0) {
+        throw new Error(`Order ${id} is missing a limit price`);
+      }
+      if (stopPrice == null || !Number.isFinite(stopPrice) || stopPrice <= 0) {
+        throw new Error(`Order ${id} is missing a stop price`);
+      }
+      return this.createStopLimitOrder({
+        ticker: order.ticker,
+        quantity,
+        limitPrice,
+        stopPrice,
+        timeValidity,
+      });
+    }
+
+    throw new Error(`Cannot edit ${order.type} order ${id}`);
+  }
+
   async cancelOpenOrders(
     options?: { ids: number[] } | OrdersFilter,
   ): Promise<Order[]> {
@@ -290,7 +366,7 @@ export class T212 {
 
   async closePosition(query: { ticker: Ticker }): Promise<void> {
     const position = await this.getPosition(query);
-    if (!position) return undefined;
+    if (!position) return;
     await this.cancelOpenOrders({
       ticker: query.ticker,
       side: "SELL",
@@ -299,6 +375,15 @@ export class T212 {
       ticker: query.ticker,
       quantity: position.quantity,
     });
+  }
+
+  /** Cancel open buys, then closePosition (cancel sells + market sell). */
+  async closeAll(query: { ticker: Ticker }): Promise<void> {
+    await this.cancelOpenOrders({
+      ticker: query.ticker,
+      side: "BUY",
+    });
+    await this.closePosition(query);
   }
 
   getDividends(query?: PaginationQuery): Promise<HistoryDividendItem[]> {

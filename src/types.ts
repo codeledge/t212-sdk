@@ -366,7 +366,21 @@ export interface T212ClientOptions {
 
 export interface T212ErrorBody {
   message?: string;
-  error?: string;
+  error?: string | T212ApiError;
+  title?: string;
+  detail?: string;
+  clarification?: string;
+  code?: string;
+  success?: boolean;
+  [key: string]: unknown;
+}
+
+/** Nested problem-details style error from Trading 212. */
+export interface T212ApiError {
+  type?: string;
+  title?: string;
+  status?: number;
+  detail?: string;
   [key: string]: unknown;
 }
 
